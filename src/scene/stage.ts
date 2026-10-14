@@ -135,6 +135,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     flyTo,
     zoomBy: (factor) => {
       if (mode === 'solar') {
+        solarControls.dispatchEvent({ type: 'start' } as never) // cancels any flight in progress
         solarCamera.position.setLength(THREE.MathUtils.clamp(solarCamera.position.length() * factor, solarControls.minDistance, solarControls.maxDistance))
         return
       }

@@ -78,21 +78,30 @@ function startBackoff(id: string): void {
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
-/** Several small NAME queries, kept only where the owner table says the object belongs to India. */
-async function fetchIndiaExtra(): Promise<Omm[]> {
+const isThrottle = (message: string): boolean => / 40[39] | 429 /.test(` ${message} `)
+
+/**
+ * Several small NAME queries. Stops at the first throttle response instead of sending the rest.
+ * `complete` is true only when every query succeeded, so a partial result is never cached as if it were whole.
+ */
+async function fetchIndiaExtra(): Promise<{ rows: Omm[]; complete: boolean }> {
   const rows: Omm[] = []
   let ok = 0
+  let throttled = false
   for (const name of INDIA_QUERIES) {
     try {
       rows.push(...(await fetchJson(`${CELESTRAK}?NAME=${encodeURIComponent(name)}&FORMAT=json`)))
       ok += 1
-    } catch {
-      // one throttled query should not lose the rest
+    } catch (e) {
+      if (isThrottle((e as Error).message)) {
+        throttled = true
+        break
+      }
     }
     await wait(250)
   }
-  if (ok === 0) throw new Error('every Indian-object query failed (403)')
-  return rows // filtered by owner when read, so a newer owner table applies even to cached rows
+  if (ok === 0) throw new Error(throttled ? 'Indian-object queries throttled by CelesTrak 403 ' : 'every Indian-object query failed')
+  return { rows, complete: ok === INDIA_QUERIES.length } // owner filtering happens when read, so a newer owner table applies to cached rows too
 }
 
 async function loadGroup(id: string): Promise<{ rows: Omm[]; source: Source }> {
@@ -101,11 +110,16 @@ async function loadGroup(id: string): Promise<{ rows: Omm[]; source: Source }> {
   try {
     // a 403/429 from CelesTrak means we pulled this group too recently: stop asking for 2h
     if (inBackoff(id)) throw new Error('backing off after throttle')
-    const rows = id === 'india-extra' ? await fetchIndiaExtra() : await fetchJson(`${CELESTRAK}?GROUP=${encodeURIComponent(id)}&FORMAT=json`)
+    if (id === 'india-extra') {
+      const r = await fetchIndiaExtra()
+      if (r.complete) void cachePut(id, r.rows)
+      return { rows: r.rows, source: 'live' }
+    }
+    const rows = await fetchJson(`${CELESTRAK}?GROUP=${encodeURIComponent(id)}&FORMAT=json`)
     void cachePut(id, rows)
     return { rows, source: 'live' }
   } catch (liveError) {
-    if (/ 40[39] | 429 /.test(` ${(liveError as Error).message} `)) startBackoff(id)
+    if (isThrottle((liveError as Error).message)) startBackoff(id)
     if (cached) return { rows: cached.rows, source: 'cache' }
     try {
       return { rows: await fetchJson(`./data/${id}.json`), source: 'snapshot' }

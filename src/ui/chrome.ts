@@ -210,10 +210,12 @@ export class Chrome {
       this.toggleTimeMenu(false)
     }
     const input = h('input', { type: 'datetime-local', 'aria-label': 'Date and time (UTC)' })
+    input.min = '1800-01-01T00:00'
+    input.max = '2050-12-31T23:59'
     const go = h('button', { class: 'primary', onClick: () => {
       const ms = Date.parse(`${input.value}:00Z`)
       if (Number.isFinite(ms)) {
-        this.actions.jumpTo(ms)
+        this.actions.jumpTo(Math.min(Date.UTC(2050, 11, 31), Math.max(Date.UTC(1800, 0, 1), ms)))
         this.toggleTimeMenu(false)
       }
     } }, 'Go')
@@ -238,6 +240,14 @@ export class Chrome {
     document.addEventListener('pointerdown', (e) => {
       if (!this.timeMenu.hidden && !this.timeMenu.parentElement?.contains(e.target as Node)) this.toggleTimeMenu(false)
     })
+  }
+
+  /** Closes the time menu if it is open. Returns whether it was. */
+  closeTimeMenu(): boolean {
+    if (this.timeMenu.hidden) return false
+    this.toggleTimeMenu(false)
+    this.clock.focus()
+    return true
   }
 
   private toggleTimeMenu(open = this.timeMenu.hidden): void {

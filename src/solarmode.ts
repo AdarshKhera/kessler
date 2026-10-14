@@ -49,7 +49,8 @@ export function createSolarMode(d: SolarDeps) {
   let busy = false
   let satsOn = false
   let lastSlow = 0
-  let wheelAcc = 0
+  let wheelIn = 0
+  let wheelOut = 0
 
   const labels = new Labels($('labels'), (id) => focusBody(id))
   const nav = new BodiesNav($('bodies'), (id) => focusBody(id), (k) => preset(k), () => void leave())
@@ -107,61 +108,73 @@ export function createSolarMode(d: SolarDeps) {
     if (active || busy) return
     busy = true
     veil.classList.add('on')
-    await sleep(460)
-    d.clearEarthView()
-    solar.build()
-    solar.prime(d.engine.clock.now())
-    active = true
-    d.stage.setMode('solar')
-    d.engine.setSuspended(true)
-    d.stage.scene.remove(d.swarm.points)
-    solar.earthFrame.add(d.swarm.points)
-    d.swarm.points.scale.setScalar(SAT_UNIT_AU)
-    d.swarm.setUnit(SAT_UNIT_AU)
-    d.swarm.points.visible = false
-    satsOn = false
-    d.modeSwitch.set('solar')
-    $('fleets').hidden = true
-    $('bodies').hidden = false
-    d.chrome.setTimeMode('solar')
-    d.engine.setWarp(1)
-    if (bodyId && asBody(bodyId)) {
-      solar.setFocus(bodyId, true)
-      focusBody(bodyId)
-    } else {
-      focusBody('earth', true)
-      toast('Zooming out from Earth. Pick any world on the left.', 4200)
+    try {
+      await sleep(460)
+      d.clearEarthView()
+      solar.build()
+      solar.prime(d.engine.clock.now())
+      active = true
+      d.stage.setMode('solar')
+      d.engine.setSuspended(true)
+      d.stage.scene.remove(d.swarm.points)
+      solar.earthFrame.add(d.swarm.points)
+      // Earth's frame is already scaled to Earth's radius, so 1000 km is 1000 / R_earth in its local units
+      d.swarm.points.scale.setScalar(1000 / (bodyById('earth')?.radiusKm ?? 6371))
+      d.swarm.setUnit(SAT_UNIT_AU)
+      d.swarm.points.visible = false
+      satsOn = false
+      d.modeSwitch.set('solar')
+      $('fleets').hidden = true
+      $('bodies').hidden = false
+      d.chrome.setTimeMode('solar')
+      d.engine.setWarp(1)
+      if (bodyId && asBody(bodyId)) {
+        solar.setFocus(bodyId, true)
+        focusBody(bodyId)
+      } else {
+        focusBody('earth', true)
+        toast('Zooming out from Earth. Pick any world on the left.', 4200)
+      }
+      await sleep(120)
+    } finally {
+      veil.classList.remove('on')
+      busy = false
     }
-    await sleep(120)
-    veil.classList.remove('on')
-    busy = false
   }
 
   async function leave(): Promise<void> {
     if (!active || busy) return
     busy = true
     veil.classList.add('on')
-    await sleep(460)
-    active = false
-    d.stage.setMode('earth')
-    solar.earthFrame.remove(d.swarm.points)
-    d.stage.scene.add(d.swarm.points)
-    d.swarm.points.scale.setScalar(1)
-    d.swarm.setUnit(1)
-    d.swarm.points.visible = true
-    d.engine.setSuspended(false)
-    if (d.engine.clock.warp > 300) d.engine.setWarp(1)
-    d.chrome.setTimeMode('earth')
-    d.modeSwitch.set('earth')
-    labels.clear()
-    scaleEl.hidden = true
-    d.card.hide()
-    $('fleets').hidden = false
-    $('bodies').hidden = true
-    d.restoreEarthView()
-    await sleep(120)
-    veil.classList.remove('on')
-    busy = false
+    try {
+      await sleep(460)
+      active = false
+      d.stage.setMode('earth')
+      solar.earthFrame.remove(d.swarm.points)
+      d.stage.scene.add(d.swarm.points)
+      d.swarm.points.scale.setScalar(1)
+      d.swarm.setUnit(1)
+      d.swarm.points.visible = true
+      d.engine.setSuspended(false)
+      if (d.engine.clock.warp > 300) d.engine.setWarp(1)
+      // years of fast-forward leave satellite orbits unusable: come back to live time
+      if (Math.abs(d.engine.clock.now() - Date.now()) > 14 * 86_400_000) {
+        d.engine.jumpToLive()
+        toast('Back to live time', 3000)
+      }
+      d.chrome.setTimeMode('earth')
+      d.modeSwitch.set('earth')
+      labels.clear()
+      scaleEl.hidden = true
+      d.card.hide()
+      $('fleets').hidden = false
+      $('bodies').hidden = true
+      d.restoreEarthView()
+      await sleep(120)
+    } finally {
+      veil.classList.remove('on')
+      busy = false
+    }
   }
 
   /** Called every frame while the solar view is showing. */
@@ -199,12 +212,12 @@ export function createSolarMode(d: SolarDeps) {
   // zooming all the way into Earth hands control back to the satellite view
   d.stage.canvas.addEventListener('wheel', (e: WheelEvent) => {
     if (!active || busy || solar.focusId !== 'earth' || e.deltaY >= 0) {
-      wheelAcc = 0
+      wheelIn = 0
       return
     }
     if (d.stage.solar.camera.position.length() <= solar.minDistance('earth') * 1.1) {
-      wheelAcc += -e.deltaY
-      if (wheelAcc > 240) void leave()
+      wheelIn += -e.deltaY
+      if (wheelIn > 240) void leave()
     }
   }, { passive: true })
 
@@ -254,12 +267,12 @@ export function createSolarMode(d: SolarDeps) {
       if (active || busy) return
       const cam = d.stage.camera
       if (e.deltaY > 0 && cam.position.length() >= d.stage.controls.maxDistance * 0.97) {
-        wheelAcc += e.deltaY
-        if (wheelAcc > 260) {
-          wheelAcc = 0
+        wheelOut += e.deltaY
+        if (wheelOut > 260) {
+          wheelOut = 0
           void enter()
-        } else if (wheelAcc > 60) toast('Keep zooming out to leave Earth for the solar system.', 2400)
-      } else wheelAcc = 0
+        } else if (wheelOut > 60 && wheelOut - e.deltaY <= 60) toast('Keep zooming out to leave Earth for the solar system.', 2400)
+      } else wheelOut = 0
     },
   }
 }

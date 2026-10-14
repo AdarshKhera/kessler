@@ -155,14 +155,18 @@ async function main(): Promise<void> {
   const ownerTable = await loadOwners()
   const catalog = await loadCatalog((done, total, name) => boot(`Fetching orbits · ${name}`, (done / total) * 100), ownerTable)
   if (catalog.sats.length === 0) {
+    previewing = false
     boot('No orbit data available. Run npm run snapshot for an offline copy.', 0)
     return
   }
   const sats = catalog.sats
   boot(`Calculating ${fmt(sats.length)} orbits`, 100)
   const engine = new Engine(sats)
-  await engine.start()
-  previewing = false
+  try {
+    await engine.start()
+  } finally {
+    previewing = false
+  }
 
   const swarm = new Swarm(sats, engine.positions)
   const focus = new FocusVisuals(globe.earth)
@@ -246,7 +250,7 @@ async function main(): Promise<void> {
     engine.cancelConjunctions()
     neighborIdx = []
     card.hide()
-    set({ selected: -1, fleet: -1, country: '', partner: -1 })
+    set({ selected: -1, fleet: -1, country: '', partner: -1, hover: -1 })
     syncView()
   }
 
@@ -295,12 +299,20 @@ async function main(): Promise<void> {
   }
 
   const toggleCountry = (code: string) => (code === state.country ? clearSelection() : openCountry(code))
+  let sheetOpen = false
+  const phone = matchMedia('(max-width: 980px)')
+  const applyShift = () => stage.setShift(sheetOpen && phone.matches ? 0.17 : 0)
+  phone.addEventListener('change', applyShift)
+
   const toggleFleet = (op: number) => (op === state.fleet ? clearSelection() : openFleet(op))
 
   const card = new Card($('card'), sats, {
     close: () => (solarMode.active ? solarMode.overview() : clearSelection()),
     enterEarth: () => void solarMode.leave(),
-    visibility: (open) => stage.setShift(open && matchMedia('(max-width: 980px)').matches ? 0.17 : 0),
+    visibility: (open) => {
+      sheetOpen = open
+      applyShift()
+    },
     selectSat,
     partner: (i) => set({ partner: i }),
     openFleet,
@@ -352,7 +364,17 @@ async function main(): Promise<void> {
   })
 
   const overlays = $('overlays')
-  const search = new Search(overlays, sats, { pickSat: selectSat, pickFleet: openFleet, pickCountry: openCountry, countries: () => countryRows })
+  /** Satellite, fleet and country views live in the Earth scene: leave the solar system first. */
+  const inEarth = (fn: () => void) => {
+    if (solarMode.active) void solarMode.leave().then(fn)
+    else fn()
+  }
+  const search = new Search(overlays, sats, {
+    pickSat: (i) => inEarth(() => selectSat(i)),
+    pickFleet: (op) => inEarth(() => openFleet(op)),
+    pickCountry: (c) => inEarth(() => openCountry(c)),
+    countries: () => countryRows,
+  })
   const guide = new Guide(overlays, {
     facts: () => {
       const next = launchInfo?.upcoming.find((l) => l.netMs > Date.now())
@@ -444,13 +466,14 @@ async function main(): Promise<void> {
     const { width, height } = stage.size()
     const hit = swarm.pick(e.offsetX, e.offsetY, width, height, stage.camera, e.pointerType === 'touch' ? 22 : 12, pickAllow)
     if (hit >= 0) selectSat(hit)
-    else if (state.selected >= 0 || state.fleet >= 0) clearSelection()
+    else if (state.selected >= 0 || state.fleet >= 0 || state.country !== '') clearSelection()
   })
 
   window.addEventListener('keydown', (e) => {
     const mod = e.metaKey || e.ctrlKey
     if (e.key === 'Escape') {
       if (welcome.isOpen) welcome.finish(false)
+      else if (chrome.closeTimeMenu()) return
       else if (search.isOpen) search.close()
       else if (guide.isOpen) guide.close()
       else if (tour.isRunning) tour.finish()
@@ -460,7 +483,7 @@ async function main(): Promise<void> {
     }
     if (mod && e.key.toLowerCase() === 'k') {
       e.preventDefault()
-      if (!guide.isOpen) search.open()
+      if (!guide.isOpen && !welcome.isOpen && !tour.isRunning) search.open()
       return
     }
     if (mod || e.altKey || search.isOpen || guide.isOpen || welcome.isOpen) return
@@ -584,23 +607,30 @@ async function main(): Promise<void> {
     const view = parseHash(location.hash)
     if (view.sat !== undefined) {
       const idx = sats.findIndex((s) => s.id === view.sat)
-      if (idx >= 0) return selectSat(idx), true
+      if (idx >= 0) return inEarth(() => selectSat(idx)), true
     } else if (view.body || view.solar) {
+      if (solarMode.active) {
+        if (view.body) solarMode.focusBody(view.body)
+        else solarMode.overview()
+        return true
+      }
       void solarMode.enter(view.body).then(() => view.solar && solarMode.overview())
       return true
     } else if (view.fleet) {
       const op = opIndex(view.fleet)
-      if (op >= 0) return openFleet(op), true
+      if (op >= 0) return inEarth(() => openFleet(op)), true
     } else if (view.country) {
       if (countryRows.length === 0) return (pendingCountry = view.country), true // owner table still loading
-      if (countryRows.some((c) => c.code.toLowerCase() === view.country)) return openCountry(view.country!), true
+      if (countryRows.some((c) => c.code.toLowerCase() === view.country)) return inEarth(() => openCountry(view.country!)), true
     }
     return false
   }
   window.addEventListener('hashchange', () => {
     if (applyHash()) return
-    if (location.hash === '') clearSelection()
-    else {
+    if (location.hash === '') {
+      if (solarMode.active) void solarMode.leave()
+      else clearSelection()
+    } else if (!solarMode.active) {
       syncView()
       toast('That view is not in the loaded data')
     }
