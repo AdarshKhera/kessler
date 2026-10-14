@@ -27,6 +27,8 @@ export interface Stage {
   flyTo(direction: THREE.Vector3, radius?: number): void
   zoomBy(factor: number): void
   resetView(): void
+  /** Shift the 3D view up by a fraction of its height (used when a bottom sheet covers the lower part on phones). */
+  setShift(fraction: number): void
   size(): { width: number; height: number }
 }
 
@@ -82,9 +84,23 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     camera.updateProjectionMatrix()
     solarCamera.aspect = w / h
     solarCamera.updateProjectionMatrix()
+    applyShift()
+  }
+  let shift = 0
+  const applyShift = () => {
+    const w = canvas.clientWidth
+    const h = canvas.clientHeight
+    for (const cam of [camera, solarCamera]) {
+      if (shift === 0 || w === 0 || h === 0) cam.clearViewOffset()
+      else cam.setViewOffset(w, h, 0, h * shift, w, h)
+    }
   }
   new ResizeObserver(resize).observe(canvas.parentElement!)
   resize()
+  /** Camera distance that keeps Earth and its LEO shell fully in frame, even on a tall phone screen. */
+  const homeDistance = () => Math.max(28.5, 8.6 / (Math.tan((camera.fov * Math.PI) / 360) * camera.aspect))
+  camera.position.setLength(homeDistance())
+  controls.maxDistance = Math.max(140, homeDistance() * 3)
 
   let fly: { fromDir: THREE.Vector3; turn: THREE.Quaternion; r0: number; r1: number; t0: number } | null = null
   const identity = new THREE.Quaternion()
@@ -125,7 +141,11 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       const r = THREE.MathUtils.clamp(camera.position.length() * factor, controls.minDistance, controls.maxDistance)
       flyTo(camera.position.clone().normalize(), r)
     },
-    resetView: () => flyTo(new THREE.Vector3(-6, 10, 26).normalize(), 28.5),
+    setShift(fraction) {
+      shift = fraction
+      applyShift()
+    },
+    resetView: () => flyTo(new THREE.Vector3(-6, 10, 26).normalize(), homeDistance()),
     size: () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
     render() {
       const now = performance.now()

@@ -21,6 +21,8 @@ export interface CardActions {
   openFleet(operator: number): void
   share(): void
   enterEarth?(): void
+  /** the sheet opened or closed (phones shift the 3D view so the subject stays visible) */
+  visibility?(open: boolean): void
 }
 
 export interface LiveSample {
@@ -79,15 +81,17 @@ export class Card {
   hide(): void {
     this.shownFleet = -1
     if (this.root.contains(document.activeElement)) document.getElementById('gl')?.focus()
-    this.root.classList.remove('open')
+    this.root.classList.remove('open', 'expanded')
     this.root.setAttribute('aria-hidden', 'true')
     this.root.inert = true
+    this.actions.visibility?.(false)
   }
 
   private show(...children: (Node | null)[]): void {
     const hadFocus = this.root.contains(document.activeElement)
     clear(this.root)
     this.root.append(
+      h('button', { class: 'grab', 'aria-label': 'Show more or less', onClick: () => this.root.classList.toggle('expanded') }),
       h('button', { class: 'x share', 'aria-label': 'Copy link to this view', title: 'Copy link', onClick: () => this.actions.share() }, this.icon(icons.link)),
       h('button', { class: 'x', 'aria-label': 'Close', title: 'Close (Esc)', onClick: () => this.actions.close() }, this.icon(icons.close)),
       ...children.filter((c): c is Node => c !== null),
@@ -96,6 +100,7 @@ export class Card {
     this.root.classList.add('open')
     this.root.setAttribute('aria-hidden', 'false')
     this.root.inert = false
+    this.actions.visibility?.(true)
     const title = this.root.querySelector('h2')
     title?.setAttribute('tabindex', '-1')
     if (hadFocus) title?.focus()

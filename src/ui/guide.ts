@@ -49,7 +49,7 @@ export class Guide {
 
   constructor(mount: HTMLElement, private readonly ctx: GuideContext) {
     const segs = h('div', { class: 'segs wide' })
-    for (const [key, label] of [['facts', 'Facts'], ['how', 'How to use'], ['data', 'Data'], ['credits', 'Credits']] as const) {
+    for (const [key, label] of [['facts', 'Facts'], ['how', 'How to'], ['data', 'Data'], ['credits', 'Credits']] as const) {
       const b = h('button', { class: 'seg', onClick: () => this.go(key) }, label)
       this.tabs.set(key, b)
       segs.append(b)

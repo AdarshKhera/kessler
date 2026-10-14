@@ -43,6 +43,7 @@ function writeHash(hash: string): void {
 export function createSolarMode(d: SolarDeps) {
   const solar = new SolarSystem()
   d.stage.solar.scene.add(createStars(2600, 2400), solar.root)
+  d.stage.solar.controls.addEventListener('start', () => solar.cancelZoom())
   const veil = $('veil')
   let active = false
   let busy = false
@@ -51,7 +52,7 @@ export function createSolarMode(d: SolarDeps) {
   let wheelAcc = 0
 
   const labels = new Labels($('labels'), (id) => focusBody(id))
-  const nav = new BodiesNav($('bodies'), (id) => focusBody(id), (k) => preset(k))
+  const nav = new BodiesNav($('bodies'), (id) => focusBody(id), (k) => preset(k), () => void leave())
   const scaleEl = $('scale')
   let atOverview = false
 
@@ -124,7 +125,6 @@ export function createSolarMode(d: SolarDeps) {
     $('bodies').hidden = false
     d.chrome.setTimeMode('solar')
     d.engine.setWarp(1)
-    d.stage.solar.controls.addEventListener('start', () => solar.cancelZoom())
     if (bodyId && asBody(bodyId)) {
       solar.setFocus(bodyId, true)
       focusBody(bodyId)

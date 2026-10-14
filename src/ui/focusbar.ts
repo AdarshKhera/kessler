@@ -11,14 +11,26 @@ export interface FocusInfo {
   readonly hint?: string
 }
 
-const HINTS: Readonly<Record<FocusKind, string>> = {
-  idle: 'Hover a dot to preview its fleet · Click to inspect · Drag to rotate',
-  sat: 'Hover shows only its fleet-mates. Esc or Clear to go back.',
-  fleet: 'Everything else is dimmed. Hover and click work inside this view only.',
-  country: 'Everything else is dimmed. Hover and click work inside this view only.',
-  body: 'Drag to orbit it, scroll to zoom. Pick another world on the left, or Clear to see the whole system.',
-  'solar-idle': 'Click a planet or a name · Drag to rotate · Scroll to zoom out to Pluto',
-}
+const touch = (): boolean => typeof matchMedia === 'function' && matchMedia('(hover: none)').matches
+
+const HINTS = (): Readonly<Record<FocusKind, string>> =>
+  touch()
+    ? {
+        idle: 'Tap a dot to inspect it · Drag to rotate · Pinch to zoom',
+        sat: 'Tap Clear to go back. Only its fleet-mates can be tapped.',
+        fleet: 'Everything else is dimmed. Taps work inside this view only.',
+        country: 'Everything else is dimmed. Taps work inside this view only.',
+        body: 'Drag to orbit · pinch to zoom · Clear for the whole system',
+        'solar-idle': 'Tap a planet or its name · Drag to rotate · Pinch to zoom out to Pluto',
+      }
+    : {
+        idle: 'Hover a dot to preview its fleet · Click to inspect · Drag to rotate',
+        sat: 'Hover shows only its fleet-mates. Esc or Clear to go back.',
+        fleet: 'Everything else is dimmed. Hover and click work inside this view only.',
+        country: 'Everything else is dimmed. Hover and click work inside this view only.',
+        body: 'Drag to orbit it, scroll to zoom. Pick another world on the left, or Clear to see the whole system.',
+        'solar-idle': 'Click a planet or a name · Drag to rotate · Scroll to zoom out to Pluto',
+      }
 
 /** Always-visible statement of what you are looking at, with the one obvious way out. */
 export class FocusBar {
@@ -46,7 +58,7 @@ export class FocusBar {
     this.title.textContent = info.label
     this.detail.textContent = info.detail ?? ''
     this.iconSlot.replaceChildren(...(info.icon ? [info.icon] : []))
-    this.hint.textContent = info.hint ?? HINTS[info.kind]
+    this.hint.textContent = info.hint ?? HINTS()[info.kind]
     this.hint.dataset.kind = info.kind
   }
 }

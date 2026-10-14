@@ -130,6 +130,26 @@ async function main(): Promise<void> {
     boot('Kessler needs WebGL 2. Try a recent Chrome, Safari, Edge or Firefox.', 0)
     return
   }
+  // First paint: the globe renders immediately while orbit data streams in behind a see-through loader.
+  const stage = createStage($('gl') as HTMLCanvasElement)
+  const globe = createGlobe()
+  const shells = createShells()
+  stage.scene.add(createStars(), globe.root, shells)
+  const previewSun = new THREE.Vector3()
+  const previewScene = new Float32Array(3)
+  let previewing = true
+  const preview = () => {
+    if (!previewing) return
+    const now = new Date()
+    globe.earth.rotation.y = gstime(now)
+    const sun = sunPos(jday(now)).rsun
+    eciToScene(sun.x, sun.y, sun.z, previewScene, 0)
+    globe.setSun(previewSun.set(previewScene[0], previewScene[1], previewScene[2]))
+    stage.render()
+    requestAnimationFrame(preview)
+  }
+  requestAnimationFrame(preview)
+
   boot('Fetching orbits', 2)
   const launchesPromise = loadLaunches()
   const ownerTable = await loadOwners()
@@ -142,13 +162,11 @@ async function main(): Promise<void> {
   boot(`Calculating ${fmt(sats.length)} orbits`, 100)
   const engine = new Engine(sats)
   await engine.start()
+  previewing = false
 
-  const stage = createStage($('gl') as HTMLCanvasElement)
-  const globe = createGlobe()
-  const shells = createShells()
   const swarm = new Swarm(sats, engine.positions)
   const focus = new FocusVisuals(globe.earth)
-  stage.scene.add(createStars(), globe.root, shells, swarm.points, focus.root)
+  stage.scene.add(swarm.points, focus.root)
 
   let state: UiState = initialState
   let launchInfo: LaunchInfo | null = null
@@ -282,6 +300,7 @@ async function main(): Promise<void> {
   const card = new Card($('card'), sats, {
     close: () => (solarMode.active ? solarMode.overview() : clearSelection()),
     enterEarth: () => void solarMode.leave(),
+    visibility: (open) => stage.setShift(open && matchMedia('(max-width: 980px)').matches ? 0.17 : 0),
     selectSat,
     partner: (i) => set({ partner: i }),
     openFleet,
@@ -311,6 +330,7 @@ async function main(): Promise<void> {
     },
     togglePause: () => engine.setPaused(!engine.clock.paused),
     live: () => engine.jumpToLive(),
+    jumpTo: (ms) => engine.jumpTo(ms),
   }, sats.length, statusOf(catalog, newestAgeHours(sats, Date.now())))
 
   new Dock($('dock'), {

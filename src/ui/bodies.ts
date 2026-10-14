@@ -5,9 +5,10 @@ import { fmt, h } from './dom'
 export class BodiesNav {
   private readonly rows = new Map<string, { btn: HTMLButtonElement; dist: HTMLElement }>()
 
-  constructor(root: HTMLElement, onPick: (id: string) => void, onPreset: (kind: 'inner' | 'outer' | 'whole') => void) {
+  constructor(root: HTMLElement, onPick: (id: string) => void, onPreset: (kind: 'inner' | 'outer' | 'whole') => void, onEarth: () => void) {
     root.replaceChildren(
       h('div', { class: 'fhead' }, h('span', { class: 'ftitle' }, 'Bodies')),
+      h('button', { class: 'backearth', onClick: onEarth, title: 'Return to the satellite view of Earth' }, '← Satellite view'),
       h('div', { class: 'segs ftabs' },
         ...([['inner', 'Inner'], ['outer', 'Outer'], ['whole', 'All']] as const).map(([k, label]) => h('button', { class: 'seg', title: `Show the ${label.toLowerCase()} planets`, onClick: () => onPreset(k) }, label))),
       h('p', { class: 'fhelp' }, 'Click a world, here or in space, to fly to it. ← → visits the next one.'),

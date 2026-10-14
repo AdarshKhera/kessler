@@ -17,6 +17,8 @@ export interface ChromeActions {
   setWarp(warp: number): void
   togglePause(): void
   live(): void
+  /** move simulated time to an absolute instant (ms since epoch) */
+  jumpTo(ms: number): void
 }
 
 const EARTH_WARPS = [10, 60, 300]
@@ -55,7 +57,11 @@ export class Chrome {
   private readonly count = h('span')
   private readonly sdot = h('i', { class: 'sdot ok' })
   private objectCount = 0
-  private readonly clock = h('b')
+  private readonly clock = h('button', { class: 'clockbtn', 'aria-haspopup': 'true', 'aria-expanded': 'false', title: 'Jump in time' })
+  private readonly timeMenu = h('div', { class: 'menu timemenu', hidden: true, role: 'group', 'aria-label': 'Jump in time' })
+  private readonly clockFull = h('span', { class: 'cl-full' })
+  private readonly clockShort = h('span', { class: 'cl-short' })
+  private lastNow = Date.now()
   private readonly pause = h('button', { class: 'round', id: 'btn-pause', 'aria-label': 'Pause' })
   private readonly liveBtn = h('button', { class: 'seg on' }, 'Live')
   private readonly warpBtns: HTMLButtonElement[] = []
@@ -136,7 +142,9 @@ export class Chrome {
       const b = h('button', { class: 'seg', onClick: () => actions.setWarp(this.warps[i]) }, `${w}×`)
       this.warpBtns.push(b)
     })
-    parts.time.replaceChildren(this.pause, this.clock, h('div', { class: 'segs' }, this.liveBtn, ...this.warpBtns))
+    parts.time.replaceChildren(this.timeMenu, this.pause, this.clock, h('div', { class: 'segs' }, this.liveBtn, ...this.warpBtns))
+    this.clock.append(this.clockFull, this.clockShort)
+    this.buildTimeMenu()
   }
 
   private item(o: {
@@ -194,6 +202,47 @@ export class Chrome {
       this.countryList.append(b)
     }
     this.setCountry(this.activeCountry)
+  }
+
+  private buildTimeMenu(): void {
+    const jump = (deltaMs: number) => {
+      this.actions.jumpTo(this.lastNow + deltaMs)
+      this.toggleTimeMenu(false)
+    }
+    const input = h('input', { type: 'datetime-local', 'aria-label': 'Date and time (UTC)' })
+    const go = h('button', { class: 'primary', onClick: () => {
+      const ms = Date.parse(`${input.value}:00Z`)
+      if (Number.isFinite(ms)) {
+        this.actions.jumpTo(ms)
+        this.toggleTimeMenu(false)
+      }
+    } }, 'Go')
+    this.timeMenu.append(
+      h('div', { class: 'tm-row' },
+        ...([['−1 day', -86_400_000], ['−1 hour', -3_600_000], ['+1 hour', 3_600_000], ['+1 day', 86_400_000]] as const).map(([label, ms]) => h('button', { class: 'seg', onClick: () => jump(ms) }, label))),
+      h('button', { class: 'tm-now', onClick: () => {
+        this.actions.live()
+        this.toggleTimeMenu(false)
+      } }, 'Back to now (live)'),
+      h('label', { class: 'tm-date' }, h('small', {}, 'Go to a date (UTC)'), h('div', {}, input, go)),
+      h('p', { class: 'fine' }, 'Satellite positions are most accurate within about two weeks of their element dates. Planets are valid for 1800 to 2050.'),
+    )
+    this.clock.addEventListener('click', () => this.toggleTimeMenu())
+    this.timeMenu.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        this.toggleTimeMenu(false)
+        this.clock.focus()
+      }
+    })
+    document.addEventListener('pointerdown', (e) => {
+      if (!this.timeMenu.hidden && !this.timeMenu.parentElement?.contains(e.target as Node)) this.toggleTimeMenu(false)
+    })
+  }
+
+  private toggleTimeMenu(open = this.timeMenu.hidden): void {
+    this.timeMenu.hidden = !open
+    this.clock.setAttribute('aria-expanded', String(open))
   }
 
   /** Time speeds make sense differently for satellites (minutes) and planets (days). */
@@ -284,8 +333,10 @@ export class Chrome {
   }
 
   update(nowMs: number, warp: number, paused: boolean): void {
+    this.lastNow = nowMs
     const d = new Date(nowMs)
-    this.clock.textContent = `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}  ${d.toISOString().slice(11, 19)} UTC`
+    this.clockFull.textContent = `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}  ${d.toISOString().slice(11, 19)} UTC`
+    this.clockShort.textContent = `${d.toISOString().slice(11, 16)} UTC`
     const live = !paused && warp === 1 && Math.abs(nowMs - Date.now()) < 3000
     this.liveBtn.classList.toggle('on', live)
     this.liveBtn.setAttribute('aria-pressed', String(live))

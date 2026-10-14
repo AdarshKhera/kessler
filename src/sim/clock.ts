@@ -25,6 +25,12 @@ export class SimClock {
     this.paused = paused
   }
 
+  /** Move simulated time to an absolute instant, keeping the current speed and pause state. */
+  jumpTo(ms: number): void {
+    this.anchorSim = ms
+    this.anchorReal = performance.now()
+  }
+
   jumpToLive(): void {
     this.anchorSim = Date.now()
     this.anchorReal = performance.now()

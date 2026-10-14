@@ -98,6 +98,11 @@ export class Engine {
     this.resync()
   }
 
+  jumpTo(ms: number): void {
+    this.clock.jumpTo(ms)
+    this.resync()
+  }
+
   jumpToLive(): void {
     this.clock.jumpToLive()
     this.resync()

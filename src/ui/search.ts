@@ -36,7 +36,8 @@ export class Search {
     private readonly sats: readonly Sat[],
     private readonly actions: SearchActions,
   ) {
-    const field = h('div', { class: 'field' }, this.icon(), this.input)
+    const cancel = h('button', { class: 'cancel', onClick: () => this.close(), 'aria-label': 'Close search' }, 'Cancel')
+    const field = h('div', { class: 'field' }, this.icon(), this.input, cancel)
     this.shell.append(h('div', { class: 'spot', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Search' }, field, this.list))
     this.shell.addEventListener('pointerdown', (e) => {
       if (e.target === this.shell) this.close()

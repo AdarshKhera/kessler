@@ -19,7 +19,7 @@ export class Welcome {
       h('small', { class: 'kick' }, 'Welcome'),
       h('h2', {}, 'Everything above you, live.'),
       block('What you are looking at', 'Real satellites, space stations and pieces of debris, each placed where it is right now from public tracking data. Nothing is pre-recorded.'),
-      block('What you can do', 'Hover a dot to preview its fleet and click to inspect it. Filter by fleet or country, speed up time, or zoom out of Earth for a tour of the solar system.'),
+      block('What you can do', 'Tap or click a dot to inspect it, and hover to preview its fleet. Filter by fleet or country, speed up time, or zoom out of Earth for a tour of the solar system.'),
       block('Where it comes from', 'Orbits come from CelesTrak and launch times from Launch Library 2. All the maths runs in your browser, and the Guide lists every source.'),
       h('div', { class: 'wactions' }, start, skip),
       h('p', { class: 'wcoffee' }, 'Free, ad-free and made by one person. ', h('a', { href: SUPPORT_URL, target: '_blank', rel: 'noopener noreferrer' }, 'Buy me a coffee ☕')),

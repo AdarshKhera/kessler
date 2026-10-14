@@ -11,8 +11,24 @@ npm install
 npm run dev        # http://localhost:5173 (CelesTrak throttles repeat pulls: run npm run snapshot once for an offline copy)
 npm run snapshot   # optional offline fallback into public/data (polite, idempotent). Also builds the country owner table
 npm test           # unit tests for the pure modules
+npm run lint
+npm run verify     # types + lint + tests + build, same as CI
+npm run test:coverage
 npm run build
 ```
+
+## Stack, and why
+
+| Piece | Choice | Why |
+|---|---|---|
+| Build | Vite + TypeScript (strict) | Fast dev loop, no framework tax, type safety on the orbit maths |
+| 3D | three.js, custom GLSL shaders | One `Points` object for 19k satellites with dimming done on the GPU |
+| Orbits | satellite.js (SGP4) in Web Workers | Positions are calculated, not streamed; the main thread never blocks |
+| UI | Small hand-written TypeScript components | About 30 KB of UI code; fewer moving parts than a framework for this size |
+| Data | CelesTrak, Launch Library 2 | Public, no keys, CORS-open |
+| Quality | Vitest, ESLint, GitHub Actions | `npm run verify` = types + lint + tests + build |
+
+No React on purpose: the app is a single canvas plus a handful of panels. The UI layer is isolated in `src/ui`, so it could be wrapped in React without touching the data, simulation or scene code.
 
 ## What you get
 
@@ -20,7 +36,8 @@ npm run build
 - A focus bar always says what is filtered and has one Clear button. Once you filter or select, hover and picking stay inside that view.
 - Left nav with two modes, collapsible to badges: Fleets (SpaceX, GPS, OneWeb and more, each with a mission-type glyph) and Countries (India, United States, China and about 30 more). Hover lights them on the globe, click isolates and opens a stats card. SpaceX shows shells and the next launches. India shows NavIC, Cartosat, GSAT and more, plus its retired satellites and launch-vehicle stages (about 180 tracked objects).
 - Click any dot: what it is for (inferred from name, fleet and orbit, and labelled as such), label on the globe, orbit line, ground track, coverage, nearest objects, close-approach screen, modelled health.
-- Search (`/` or ⌘K), time controls (pause, 10×, 60×, 300×, Live), zoom and layer dock.
+- Search (`/` or ⌘K), time controls (pause, 10×, 60×, 300×, Live), a time menu to jump ±1 hour or day or to any date, zoom and layer dock.
+- Phone friendly: the globe fits portrait screens, cards become bottom sheets with a drag handle and the 3D view shifts up so the subject stays visible.
 - Shareable deep links: `#sat=25544` or `#fleet=gps`. The Copy link button on the card copies the current view.
 - First-visit tour, then a Guide button with Facts, How to use, Data and Credits.
 - Keyboard: `/` search, `Space` pause, `R` reset view, `+` `-` zoom, `?` guide, `Esc` close.
@@ -40,6 +57,18 @@ Switch **Earth | Solar System** at the top, or keep zooming out of Earth. Planet
 - `src/sim/engine.ts` extrapolates linearly between ticks, so the render loop never calls SGP4.
 - `src/scene/*` Earth is a land-mask dot globe with borders and day/night shading. All objects are one `THREE.Points` with focus dimming in the shader. Picking is CPU screen-space with an Earth-occlusion test.
 - `src/ui/*` small hand-written components, no framework. Text from data always goes through text nodes.
+
+## Testing
+
+Vitest covers the logic layer (`src/lib`, about 96% of statements): ephemeris against known planet positions, SGP4 helpers, purpose inference, country and fleet summaries, URL state and the simulation clock. The UI, 3D scene and workers have no automated tests yet; they are checked by hand in a browser. Playwright smoke tests are the obvious next step.
+
+## Deploy
+
+`.github/workflows/deploy.yml` builds and publishes to GitHub Pages on manual dispatch. It needs Pages enabled for the repository. `npm run snapshot` bundles an offline copy of the data; CelesTrak may throttle repeat pulls, so the browser also fetches and caches live data itself. The share image is `public/og.png`, generated from `scripts/og.html`:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --window-size=1200,630 --screenshot=public/og.png file://$PWD/scripts/og.html
+```
 
 ## Honest limits
 
