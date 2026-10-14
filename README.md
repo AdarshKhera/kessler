@@ -60,7 +60,9 @@ Switch **Earth | Solar System** at the top, or keep zooming out of Earth. Planet
 
 ## Testing
 
-Vitest covers the logic layer (`src/lib`, about 96% of statements): ephemeris against known planet positions, SGP4 helpers, purpose inference, country and fleet summaries, URL state and the simulation clock. The UI, 3D scene and workers have no automated tests yet; they are checked by hand in a browser. Playwright smoke tests are the obvious next step.
+- **Unit (Vitest, 71 tests):** the logic layer in `src/lib` is about 96% covered: ephemeris against known planet positions, purpose inference, country and fleet summaries, URL state, the simulation clock.
+- **Browser (Playwright, 6 tests):** load, search, fleet filter and Clear, solar system deep link, time menu, and the phone bottom sheet. They use the Chrome already on your machine (no browser download) and serve data from the bundled snapshot, so run `npm run snapshot` once first, then `npm run test:e2e`. They are not in CI because they need the data snapshot and a GPU-capable browser.
+- The 3D scene itself is checked by eye; there are no pixel tests.
 
 ## Deploy
 
@@ -106,7 +108,7 @@ Ideas not built yet
 - Starlink shell and plane colouring by inclination and RAAN
 - Collision-debris time scrubber: replay Fengyun-1C 2007 breakup from epoch
 - Reentry watch: perigee under 250 km plus drag trend
-- Share-a-view links (selected id + camera + time in the URL hash)
+- Camera position and time in the share link (selection, fleet, country and solar body are already there)
 
 ## Credits and licences
 
