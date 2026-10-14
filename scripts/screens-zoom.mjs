@@ -44,4 +44,5 @@ await shot('zi-earth-sats', { hash: '#body=earth', wait: 9500, hideUi: true, act
 // zoomed-in UI details (2x)
 await shot('ui-card', { hash: '#sat=25544', wait: 5500, scale: 2, clip: { x: 920, y: 60, width: 340, height: 560 } })
 await shot('ui-fleets', { wait: 4500, scale: 2, clip: { x: 10, y: 70, width: 240, height: 590 } })
+await shot('card-clean', { viewport: { width: 1280, height: 800 }, wait: 4500, hideUi: true, act: async (p) => { await earthDist(48)(p); await p.waitForTimeout(1800) } })
 await browser.close()
