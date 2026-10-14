@@ -1,0 +1,7 @@
+node_modules
+dist
+public/data
+coverage
+.claude
+*.log
+.DS_Store
