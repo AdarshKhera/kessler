@@ -2,6 +2,8 @@
 
 Created by Adarsh Khera.
 
+**Live demo: https://adarshkhera.github.io/kessler/**
+
 Live orbital asset manager. Real element sets from CelesTrak, propagated with SGP4 in your browser. No backend.
 
 Hierarchy: operator > constellation > satellite > subsystem.
