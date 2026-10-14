@@ -124,6 +124,7 @@ export function createSolarMode(d: SolarDeps) {
       d.swarm.points.visible = false
       satsOn = false
       d.modeSwitch.set('solar')
+      d.chrome.setViewMode('solar')
       $('fleets').hidden = true
       $('bodies').hidden = false
       d.chrome.setTimeMode('solar')
@@ -164,6 +165,7 @@ export function createSolarMode(d: SolarDeps) {
       }
       d.chrome.setTimeMode('earth')
       d.modeSwitch.set('earth')
+      d.chrome.setViewMode('earth')
       labels.clear()
       scaleEl.hidden = true
       d.card.hide()

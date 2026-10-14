@@ -9,6 +9,7 @@ export interface ChromeActions {
   openSearch(): void
   openGuide(): void
   openData(): void
+  toggleMode(): void
   fleet(operator: number): void
   fleetHover(operator: number): void
   country(code: string): void
@@ -78,6 +79,7 @@ export class Chrome {
   private activeFleet = -1
   private activeCountry = ''
   private readonly fly = h('div', { id: 'fly', hidden: true }, h('b'), h('span'))
+  readonly modeBtn = h('button', { class: 'round modebtn', id: 'btn-mode', 'aria-label': 'Switch to the solar system', title: 'Earth or solar system' })
   readonly guideBtn = h('button', { class: 'round', id: 'btn-guide', 'aria-label': 'Guide and about' }, iconEl(icons.help))
 
   constructor(
@@ -97,8 +99,11 @@ export class Chrome {
 
     parts.top.replaceChildren(
       h('button', { class: 'pill', id: 'btn-search', onClick: actions.openSearch }, iconEl(icons.search), h('span', {}, 'Search'), h('kbd', {}, '/')),
+      this.modeBtn,
       this.guideBtn,
     )
+    this.setViewMode('earth')
+    this.modeBtn.addEventListener('click', actions.toggleMode)
     this.guideBtn.addEventListener('click', actions.openGuide)
 
     this.fleetsNav = parts.fleets
@@ -261,6 +266,12 @@ export class Chrome {
     this.warpBtns.forEach((b, i) => {
       b.textContent = mode === 'earth' ? `${EARTH_WARPS[i]}×` : SOLAR_LABELS[i]
     })
+  }
+
+  /** Phones swap the Earth | Solar System switch for this icon. */
+  setViewMode(mode: 'earth' | 'solar'): void {
+    this.modeBtn.replaceChildren(iconEl(mode === 'earth' ? icons.planet : icons.globe))
+    this.modeBtn.setAttribute('aria-label', mode === 'earth' ? 'Switch to the solar system' : 'Back to the satellite view of Earth')
   }
 
   setStatus(status: { label: string; tone: 'ok' | 'warn' }): void {

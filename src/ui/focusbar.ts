@@ -39,8 +39,10 @@ export class FocusBar {
   private readonly iconSlot = h('span', { class: 'fb-icon' })
   private readonly hint = h('p', { class: 'fb-hint' })
   private readonly pill: HTMLElement
+  private readonly root: HTMLElement
 
   constructor(root: HTMLElement, onClear: () => void) {
+    this.root = root
     const clear = h('button', { class: 'fb-clear', onClick: onClear }, h('span', {}, 'Clear'), this.ico())
     this.pill = h('div', { class: 'fb-pill', hidden: true }, this.iconSlot, h('div', { class: 'fb-text' }, this.title, this.detail), clear)
     root.replaceChildren(this.pill, this.hint)
@@ -60,5 +62,6 @@ export class FocusBar {
     this.iconSlot.replaceChildren(...(info.icon ? [info.icon] : []))
     this.hint.textContent = info.hint ?? HINTS()[info.kind]
     this.hint.dataset.kind = info.kind
+    this.root.dataset.kind = info.kind
   }
 }

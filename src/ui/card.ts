@@ -91,7 +91,10 @@ export class Card {
     const hadFocus = this.root.contains(document.activeElement)
     clear(this.root)
     this.root.append(
-      h('button', { class: 'grab', 'aria-label': 'Show more or less', onClick: () => this.root.classList.toggle('expanded') }),
+      h('button', { class: 'grab', 'aria-label': 'Show more or less', onClick: () => {
+        this.root.classList.toggle('expanded')
+        this.actions.visibility?.(true)
+      } }, h('span', {}, 'Details')),
       h('button', { class: 'x share', 'aria-label': 'Copy link to this view', title: 'Copy link', onClick: () => this.actions.share() }, this.icon(icons.link)),
       h('button', { class: 'x', 'aria-label': 'Close', title: 'Close (Esc)', onClick: () => this.actions.close() }, this.icon(icons.close)),
       ...children.filter((c): c is Node => c !== null),

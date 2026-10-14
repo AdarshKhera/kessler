@@ -339,3 +339,30 @@ button.row:hover { background: rgba(255, 255, 255, 0.07); }
   .grab { display: block; position: absolute; top: 0; left: 50%; width: 80px; height: 22px; transform: translateX(-50%); }
   .grab::after { content: ''; position: absolute; top: 8px; left: 18px; width: 44px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.3); }
 }
+
+/* phones: keep the globe usable. Mode switch becomes an icon, the filter pill goes (the card has its own close), the card starts as a small peek. */
+.modebtn { display: none; }
+@media (max-width: 980px) {
+  #modes { display: none; }
+  .modebtn { display: grid; }
+  #focusbar { top: 64px; }
+  #focusbar:not([data-kind='idle']):not([data-kind='solar-idle']) { display: none; }
+  .fb-hint { font-size: 11px; }
+  #scale { display: none; }
+  #card { max-height: none; padding: 14px 16px 12px; border-radius: 20px; bottom: 118px; }
+  #card.expanded { max-height: 76vh; padding: 20px 20px 16px; }
+  #card h2 { font-size: 21px; }
+  #card .eyebrow { margin-bottom: 2px; }
+  #card .sub { margin-top: 2px; }
+  #card .lede, #card .purpose p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  #card:not(.expanded) .lede { margin: 6px 0 0; font-size: 13px; }
+  #card:not(.expanded) .purpose { margin: 8px 0 0; padding: 8px 10px; }
+  #card:not(.expanded) .purpose p { font-size: 13px; margin-top: 3px; }
+  #card:not(.expanded) .basis, #card:not(.expanded) .stats, #card:not(.expanded) .legend, #card:not(.expanded) .sec, #card:not(.expanded) .kv, #card:not(.expanded) .sub, #card:not(.expanded) .primary.wide { display: none; }
+  #card.expanded .lede, #card.expanded .purpose p { display: block; }
+  .grab { top: auto; bottom: 0; left: 0; right: 0; width: auto; height: 30px; transform: none; display: flex; align-items: center; justify-content: center; }
+  .grab::after { display: none; }
+  .grab span { font-size: 12px; color: var(--accent); }
+  #card:not(.expanded) { padding-bottom: 34px; }
+  #card.expanded .grab span::before { content: 'Less'; } #card.expanded .grab span { font-size: 0; } #card.expanded .grab span::before { font-size: 12px; }
+}

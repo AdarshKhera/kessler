@@ -301,7 +301,7 @@ async function main(): Promise<void> {
   const toggleCountry = (code: string) => (code === state.country ? clearSelection() : openCountry(code))
   let sheetOpen = false
   const phone = matchMedia('(max-width: 980px)')
-  const applyShift = () => stage.setShift(sheetOpen && phone.matches ? 0.17 : 0)
+  const applyShift = () => stage.setShift(sheetOpen && phone.matches ? ($('card').classList.contains('expanded') ? 0.22 : 0.1) : 0)
   phone.addEventListener('change', applyShift)
 
   const toggleFleet = (op: number) => (op === state.fleet ? clearSelection() : openFleet(op))
@@ -331,6 +331,7 @@ async function main(): Promise<void> {
     openSearch: () => search.open(),
     openGuide: () => guide.open(),
     openData: () => guide.open('data'),
+    toggleMode: () => void (solarMode.active ? solarMode.leave() : solarMode.enter()),
     fleet: toggleFleet,
     fleetHover: (op) => set({ fleetHover: op }),
     country: toggleCountry,
