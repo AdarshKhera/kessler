@@ -6,6 +6,7 @@ import { loadLaunches, type LaunchInfo } from './data/launches'
 import { GROUPS, OPERATORS } from './data/registry'
 import { createSolarMode } from './solarmode'
 import { SUPPORT_URL } from './config'
+import { LOADING_QUOTES } from './data/quotes'
 import { loadOwners } from './data/owners'
 import { fetchSatcat } from './data/satcat'
 import { EARTH_RADIUS, EARTH_RADIUS_KM, eciToScene } from './lib/frames'
@@ -43,15 +44,36 @@ const TRACK_REFRESH_MS = 15 * 60_000
 const CONJ_WINDOW_MS = 3 * 3_600_000
 const $ = (id: string) => document.getElementById(id)!
 
-function bootScreen(): (text: string, pct: number) => void {
+function bootScreen(): ((text: string, pct: number) => void) & { stop: () => void } {
   const root = $('boot')
   const line = h('div', { class: 'bootline' })
   const fill = h('i')
-  root.replaceChildren(h('div', { class: 'bootmark' }, 'Kessler'), line, h('div', { class: 'bootbar' }, fill), h('div', { class: 'bootby' }, 'by Adarsh Khera'))
-  return (text, pct) => {
+  const quote = h('p', { class: 'bootquote' })
+  const order = [...LOADING_QUOTES].sort(() => Math.random() - 0.5)
+  let n = 0
+  const show = () => {
+    quote.classList.remove('in')
+    window.setTimeout(() => {
+      quote.textContent = order[n++ % order.length]
+      quote.classList.add('in')
+    }, 350)
+  }
+  quote.textContent = order[n++]
+  requestAnimationFrame(() => quote.classList.add('in'))
+  const timer = window.setInterval(show, 5200)
+  root.replaceChildren(
+    h('div', { class: 'bootcard' },
+      h('div', { class: 'bootmark' }, 'Kessler'),
+      quote,
+      h('div', { class: 'bootbar' }, fill),
+      line,
+      h('div', { class: 'bootby' }, 'by Adarsh Khera')),
+  )
+  const update = (text: string, pct: number) => {
     line.textContent = text
     fill.style.width = `${pct}%`
   }
+  return Object.assign(update, { stop: () => window.clearInterval(timer) })
 }
 
 const groupName = (id: string) => GROUPS.find((g) => g.id === id)?.name ?? id
@@ -659,6 +681,8 @@ async function main(): Promise<void> {
   focusBar.set({ kind: 'idle', label: '' })
   window.setInterval(() => chrome.setStatus(statusOf(catalog, newestAgeHours(sats, Date.now()))), 60_000)
   applyFocus()
+  boot.stop()
+  document.body.classList.remove('loading')
   $('boot').classList.add('done')
   requestAnimationFrame(frame)
   engine.step() // fill positions so a deep link can aim the camera before the first frame

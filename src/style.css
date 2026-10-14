@@ -169,10 +169,19 @@ button.row:hover { background: rgba(255, 255, 255, 0.07); }
 #fleets.tour-hl { border-radius: 22px; }
 
 /* boot */
-#boot { position: absolute; inset: 0; z-index: 20; display: grid; place-content: end center; padding-bottom: 12vh; gap: 12px; justify-items: center; background: radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0) 20%, rgba(0, 0, 0, 0.55) 100%); transition: opacity 0.9s var(--ease); }
+#boot { position: absolute; inset: 0; z-index: 20; display: grid; place-content: end center; padding: 0 16px 9vh; transition: opacity 0.9s var(--ease); }
 #boot.done { opacity: 0; pointer-events: none; }
-.bootmark { font: 600 26px var(--sans); letter-spacing: -0.01em; text-shadow: 0 2px 16px #000; } .bootline { text-shadow: 0 1px 8px #000; } .bootline { color: var(--ink2); font-size: 12px; }
-.bootbar { width: 140px; height: 2px; border-radius: 1px; background: rgba(120, 120, 128, 0.3); overflow: hidden; } .bootbar i { display: block; height: 100%; background: var(--ink); transition: width 0.25s; }
+.bootcard { width: min(440px, 100%); display: grid; justify-items: center; gap: 14px; padding: 22px 24px 18px; text-align: center; border-radius: 24px; background: rgba(6, 12, 22, 0.78); backdrop-filter: blur(24px) saturate(1.6); -webkit-backdrop-filter: blur(24px) saturate(1.6); border: 1px solid var(--stroke); box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45); }
+.bootmark { font: 600 22px var(--sans); letter-spacing: -0.01em; }
+.bootquote { margin: 0; min-height: 4.2em; display: grid; align-items: center; color: var(--ink); font: 300 18px/1.4 var(--sans); letter-spacing: -0.005em; opacity: 0; transform: translateY(6px); transition: opacity 0.45s var(--ease), transform 0.45s var(--ease); }
+.bootquote.in { opacity: 1; transform: none; }
+.bootline { color: var(--ink2); font-size: 12px; min-height: 1.2em; }
+.bootbar { width: 100%; height: 3px; border-radius: 2px; background: rgba(120, 120, 128, 0.3); overflow: hidden; } .bootbar i { display: block; height: 100%; background: var(--accent); transition: width 0.25s; }
+.bootby { color: var(--ink3); font-size: 11px; letter-spacing: 0.04em; }
+@media (max-width: 980px) { .bootquote { font-size: 17px; } #boot { padding-bottom: 12vh; } }
+/* while loading, only the globe and the loader show: no empty pills, no controls */
+body.loading #brand, body.loading #top, body.loading #modes, body.loading #focusbar, body.loading #fleets, body.loading #bodies, body.loading #time, body.loading #dock, body.loading #foot, body.loading #card, body.loading #scale, body.loading #labels { opacity: 0; visibility: hidden; pointer-events: none; }
+#brand, #top, #modes, #focusbar, #fleets, #bodies, #time, #dock, #foot { transition: opacity 0.6s var(--ease); }
 
 @media (max-width: 760px) {
   :root { --pad: 14px; }
@@ -192,7 +201,7 @@ button.row:hover { background: rgba(255, 255, 255, 0.07); }
 .cap { margin: 4px 0 -8px; color: var(--ink3); font: 500 11px var(--sans); letter-spacing: 0.08em; text-transform: uppercase; }
 .credits { display: grid; }
 .credit { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--stroke); font-size: 14px; } .credit:last-child { border-bottom: 0; } .credit span { color: var(--ink2); } .credit em { color: var(--ink3); font: normal 12px var(--mono); white-space: nowrap; }
-.bootby { margin-top: 10px; color: var(--ink3); font-size: 11px; letter-spacing: 0.04em; }
+
 .source p.fine { color: var(--ink3); font-size: 12px; margin-top: 4px; }
 
 /* status */
@@ -366,3 +375,13 @@ button.row:hover { background: rgba(255, 255, 255, 0.07); }
   #card:not(.expanded) { padding-bottom: 34px; }
   #card.expanded .grab span::before { content: 'Less'; } #card.expanded .grab span { font-size: 0; } #card.expanded .grab span::before { font-size: 12px; }
 }
+
+/* phone: the card sits over the bright globe, so it must be solid enough to read */
+@media (max-width: 980px) {
+  #card, #fleets, #bodies, #time, .cluster { background: rgba(14, 18, 26, 0.94); }
+  #card { border-color: rgba(255, 255, 255, 0.14); box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5); }
+  .purpose { background: rgba(255, 255, 255, 0.06); }
+}
+/* and a little more opaque on desktop for legibility over dense areas */
+#card { background: rgba(20, 22, 28, 0.82); }
+@media (max-width: 980px) { #card.expanded { padding-bottom: 44px; } }
