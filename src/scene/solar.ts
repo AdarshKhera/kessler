@@ -5,6 +5,7 @@ import { AU_KM, PLANET_IDS, heliocentric, moonGeocentric, orbitPath, poleEclipti
 import { atmosphereShells, patchEarth, patchRingShadow, ringMaterial, texUniform, trackLocal, trackSunView, vec3Uniform } from './shading'
 import { SurfaceLoader, type Layer, type SurfaceSink } from './surfaces'
 import { TextureStore, allowHugeMaps } from './textureStore'
+import { MinorBodies, type MinorInfo } from './minor'
 import { bodyTexture, ringTexture } from './textures'
 
 /** One scene unit in the satellite scene is 1000 km; this converts it to AU. */
@@ -44,7 +45,7 @@ interface MoonNode {
 export interface LabelPoint {
   readonly id: string
   readonly name: string
-  readonly kind: Body['kind'] | 'moon'
+  readonly kind: Body['kind'] | 'moon' | MinorInfo['kind']
   readonly x: number
   readonly y: number
   readonly visible: boolean
@@ -85,6 +86,7 @@ export class SolarSystem implements SurfaceSink {
   private readonly sunGlow: THREE.Sprite
   private readonly light = new THREE.PointLight(0xfff1dc, 3.2, 0, 0)
   private readonly sky: THREE.Mesh
+  readonly minor = new MinorBodies()
   private readonly skyMaterial = new THREE.MeshBasicMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, color: new THREE.Color(1.9, 1.9, 2.2) })
   private clouds: THREE.Mesh | null = null
   private ring: THREE.Mesh | null = null
@@ -113,7 +115,7 @@ export class SolarSystem implements SurfaceSink {
     this.sky.visible = false
     this.sky.frustumCulled = false
     this.sky.rotation.set(1.05, 0.9, 0) // the image is in galactic coordinates; tip the band about 60 degrees to the ecliptic
-    this.root.add(this.sky, this.world, this.sunGroup, new THREE.AmbientLight(0xffffff, 0.1))
+    this.root.add(this.sky, this.world, this.sunGroup, this.minor.root, new THREE.AmbientLight(0xffffff, 0.1))
   }
 
   /** Builds meshes. Deferred so the cost is only paid when someone opens the solar system; images arrive via loadSurfaces. */
@@ -298,11 +300,11 @@ export class SolarSystem implements SurfaceSink {
     if (id === 'sun') return this.tmp.set(0, 0, 0)
     const moon = this.moons.find((m) => m.moon.id === id)
     if (moon) return moon.pos
-    return this.planets.get(id)?.pos ?? this.tmp.set(0, 0, 0)
+    return this.planets.get(id)?.pos ?? this.minor.position(id) ?? this.tmp.set(0, 0, 0)
   }
 
   private posOf(id: string): THREE.Vector3 | undefined {
-    return id === 'sun' ? new THREE.Vector3() : (this.planets.get(id)?.pos ?? this.moons.find((m) => m.moon.id === id)?.pos)
+    return id === 'sun' ? new THREE.Vector3() : (this.planets.get(id)?.pos ?? this.moons.find((m) => m.moon.id === id)?.pos ?? this.minor.position(id))
   }
 
   distanceFromSunAu(id: string): number {
@@ -319,11 +321,13 @@ export class SolarSystem implements SurfaceSink {
 
   setFocus(id: string, immediate = false): void {
     this.focusId = id
+    this.minor.setFocus(id)
     if (immediate) this.focusSnap = true
   }
 
   /** Smallest sensible camera distance for a body (AU). */
   minDistance(id: string): number {
+    if (this.minor.has(id)) return 1e-5
     const body = id === 'sun' ? SUN : (bodyById(id) ?? MOONS.find((m) => m.id === id))
     return body ? radiusAu(body) * 1.18 : 1e-5
   }
@@ -331,6 +335,8 @@ export class SolarSystem implements SurfaceSink {
   /** A comfortable first view of a body (AU). */
   viewDistance(id: string): number {
     if (id === 'sun') return 0.03
+    const small = this.minor.info(id)
+    if (small) return id === 'jwst' ? 0.006 : small.kind === 'probe' ? 0.06 : small.kind === 'comet' ? 0.15 : small.kind === 'interstellar' ? 0.3 : 0.05
     const moon = MOONS.find((m) => m.id === id)
     if (moon) return radiusAu(moon) * 6
     const body = bodyById(id)!
@@ -372,6 +378,8 @@ export class SolarSystem implements SurfaceSink {
       const hit = this.raycaster.intersectObject(t.obj, false)[0]
       if (hit && (!best || hit.distance < best.d)) best = { id: t.id, d: hit.distance }
     }
+    const marker = this.minor.pick(this.raycaster)
+    if (marker && (!best || marker.distance < best.d)) best = { id: marker.id, d: marker.distance }
     return best?.id ?? null
   }
 
@@ -412,7 +420,9 @@ export class SolarSystem implements SurfaceSink {
 
   /** Make positions available before the first rendered frame (used to aim the camera on arrival). */
   prime(nowMs: number): void {
-    if (this.built) this.computePositions(nowMs)
+    if (!this.built) return
+    this.computePositions(nowMs)
+    this.minor.update(nowMs, this.focus, this.sunGroup.position)
   }
 
 
@@ -446,6 +456,7 @@ export class SolarSystem implements SurfaceSink {
     this.world.position.copy(this.focus).negate()
     const sunRel = this.tmp.copy(this.focus).negate()
     this.sunGroup.position.copy(sunRel)
+    this.minor.update(nowMs, this.focus, this.sunGroup.position)
     const sunDist = camera.position.distanceTo(sunRel)
     const sunScale = Math.max(radiusAu(SUN), MIN_ANGULAR.star * sunDist * 0.55)
     this.sunMesh.scale.setScalar(sunScale)
@@ -503,6 +514,11 @@ export class SolarSystem implements SurfaceSink {
       const world = this.tmp.copy(m.pos).sub(this.focus)
       const dist = camera.position.distanceTo(world)
       push(m.moon.id, m.moon.name, 'moon', world.clone(), dist < 0.05)
+    }
+    const cam = camera.position
+    for (const { info, rel } of this.minor.relativePositions(this.focus)) {
+      const near = info.id === this.focusId || rel.distanceTo(cam) < this.viewDistance(info.id) * 14
+      push(info.id, info.name, info.kind, rel, near)
     }
     return out
   }

@@ -11,7 +11,7 @@ export interface ViewState {
 export function parseHash(hash: string): ViewState {
   const params = new URLSearchParams(hash.replace(/^#/, ''))
   const body = params.get('body')
-  if (body && /^[a-z]{2,12}$/.test(body)) return { body }
+  if (body && /^[a-z0-9][a-z0-9-]{1,30}$/.test(body)) return { body }
   if (params.get('solar') === '1') return { solar: true }
   const sat = Number(params.get('sat'))
   if (Number.isInteger(sat) && sat > 0) return { sat }

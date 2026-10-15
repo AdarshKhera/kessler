@@ -31,6 +31,7 @@ const KIND_OF: Readonly<Record<string, Kind>> = {
   weather: 'weather',
   stations: 'station',
   science: 'science',
+  nasa: 'science',
   debris: 'debris',
   other: 'other',
 }

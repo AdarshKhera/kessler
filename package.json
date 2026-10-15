@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "snapshot": "node scripts/snapshot.mjs",
+    "snapshot:space": "node scripts/snapshot-space.mjs",
     "lint": "eslint .",
     "test:coverage": "vitest run --coverage",
     "verify": "npm run typecheck && npm run lint && npm test && npm run build",

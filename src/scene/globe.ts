@@ -3,7 +3,9 @@ import { geoEquirectangular, geoPath } from 'd3-geo'
 import { feature, mesh } from 'topojson-client'
 import type { Topology } from 'topojson-specification'
 import land from 'world-atlas/land-110m.json'
-import countries from 'world-atlas/countries-110m.json'
+// Natural Earth 1:10m "India point of view" worldview, simplified: Jammu and Kashmir, Ladakh, Gilgit-Baltistan and Aksai Chin are
+// drawn as part of India, matching the boundary India's government publishes. The default world-atlas file shows de facto lines.
+import countries from '../data/borders-india-view.json'
 import { EARTH_RADIUS } from '../lib/frames'
 
 const CYAN = new THREE.Color('#5ef2ff')
@@ -101,7 +103,7 @@ function densify(coords: number[][], maxStepDeg: number, out: number[]): void {
 
 function borders(): THREE.LineSegments {
   const topo = countries as unknown as Topology
-  const m = mesh(topo, topo.objects.countries as never)
+  const m = mesh(topo, topo.objects['ne10-ind'] as never)
   const out: number[] = []
   for (const line of m.coordinates) densify(line as number[][], 1, out)
   const geo = new THREE.BufferGeometry()

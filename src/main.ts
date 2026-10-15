@@ -131,6 +131,13 @@ function sourcesOf(catalog: Catalog, launches: LaunchInfo | null, newestHours: n
       href: 'https://thespacedevs.com/llapi',
     },
     {
+      name: 'NASA/JPL deep space',
+      what: 'Where spacecraft like Voyager and Parker are (JPL Horizons), and the orbits of comets and asteroids (JPL Small-Body Database). Shown in the solar system view.',
+      state: 'snapshot',
+      detail: 'JPL’s servers cannot be called from a browser, so this is saved with the site. Spacecraft paths cover 2026 to 2028; small-body orbits are calculated and stay valid for centuries.',
+      href: 'https://ssd.jpl.nasa.gov',
+    },
+    {
       name: 'SGP4 orbit model',
       what: 'Turns element sets into positions. Runs in your browser through satellite.js, not streamed from a server.',
       state: 'local',

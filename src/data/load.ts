@@ -1,4 +1,5 @@
 import { INDIA_OWNER, INDIA_QUERIES } from './extras'
+import { missionFor } from './missions'
 import { GROUPS, OPERATORS, dedupeById } from './registry'
 import { isValidOmm } from '../lib/validate'
 import type { Omm, Sat } from './types'
@@ -140,7 +141,8 @@ export async function loadCatalog(onProgress: (done: number, total: number, grou
   const failedGroups: string[] = []
   const results: { groupIndex: number; rows: Omm[] }[] = []
   let done = 0
-  const queue = GROUPS.map((g, groupIndex) => ({ g, groupIndex }))
+  const queue = GROUPS.map((g, groupIndex) => ({ g, groupIndex })).filter((x) => !x.g.derived)
+  const loadable = queue.length
   const worker = async () => {
     for (let job = queue.shift(); job; job = queue.shift()) {
       try {
@@ -152,7 +154,7 @@ export async function loadCatalog(onProgress: (done: number, total: number, grou
         failedGroups.push(job.g.id)
       }
       done += 1
-      onProgress(done, GROUPS.length, job.g.name)
+      onProgress(done, loadable, job.g.name)
     }
   }
   await Promise.all([worker(), worker(), worker(), worker()])
@@ -162,14 +164,20 @@ export async function loadCatalog(onProgress: (done: number, total: number, grou
     .flatMap(({ groupIndex, rows }) => rows.map((omm) => ({ id: Number(omm.NORAD_CAT_ID), groupIndex, omm })))
   const unique = dedupeById(flat)
   const opIndex = new Map(OPERATORS.map((o, i) => [o.id, i]))
-  const sats: Sat[] = unique.map((u, index) => ({
-    index,
-    id: u.id,
-    name: u.omm.OBJECT_NAME,
-    groupIndex: u.groupIndex,
-    operatorIndex: opIndex.get(GROUPS[u.groupIndex].operator) ?? 0,
-    omm: u.omm,
-  }))
+  const derived = new Map(GROUPS.map((g, i) => [g.id, i]))
+  const sats: Sat[] = unique.map((u, index) => {
+    // named missions move into their own fleet (NASA, SpaceX Dragon), but never their spent stages and fragments
+    const mission = /\b(DEB|R\/B)\b/.test(u.omm.OBJECT_NAME) ? undefined : missionFor(u.omm.OBJECT_NAME)
+    const groupIndex = (mission && derived.get(mission.group)) ?? u.groupIndex
+    return {
+      index,
+      id: u.id,
+      name: u.omm.OBJECT_NAME,
+      groupIndex,
+      operatorIndex: opIndex.get(GROUPS[groupIndex].operator) ?? 0,
+      omm: u.omm,
+    }
+  })
   return { sats, sources, failedGroups }
 }
 

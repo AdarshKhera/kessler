@@ -117,6 +117,7 @@ Ideas not built yet
 Created by Adarsh Khera. Independent personal project, not affiliated with or endorsed by SpaceX, CelesTrak, NASA or any operator shown.
 
 Open source used: three.js (MIT), satellite.js (MIT), d3-geo, topojson-client and world-atlas (ISC), Natural Earth data (public domain), Vite (MIT), TypeScript (Apache-2.0).
+Deep space: spacecraft trajectories from NASA/JPL Horizons and comet, asteroid and dwarf-planet orbits from the JPL Small-Body Database, saved as static files by `npm run snapshot:space` (JPL sends no CORS headers, so the browser cannot call it). Borders: Natural Earth 1:10m in the India point-of-view worldview, so Jammu and Kashmir and Ladakh are drawn as India draws them.
 Planet imagery: textures from [Solar System Scope](https://www.solarsystemscope.com/textures/) (CC BY 4.0, derived from NASA data) and NASA/USGS public-domain mosaics of Pluto and the small moons via Wikimedia Commons. Files are in `public/textures/planets`; moons without a public map borrow the Moon's surface, tinted.
 Data: CelesTrak by Dr. T.S. Kelso (element data originates from the US Space Force tracking network), Launch Library 2 by The Space Devs.
 Inspired by stuffin.space and KeepTrack. Named after the Kessler syndrome, proposed by NASA scientist Donald Kessler.

@@ -1,3 +1,4 @@
+import { MISSION_CATEGORY, missionFor } from '../data/missions'
 import type { OrbitSummary } from './orbit'
 
 export interface Purpose {
@@ -76,6 +77,8 @@ export interface PurposeInput {
 /** Best-effort, honest description of what a satellite is for. Public catalogues do not list purpose. */
 export function describePurpose({ name, operatorId, orbit }: PurposeInput): Purpose {
   const upper = name.toUpperCase()
+  const mission = /\bDEB\b|\bR\/B\b/.test(upper) ? undefined : missionFor(upper)
+  if (mission) return { category: MISSION_CATEGORY[mission.group] ?? 'Named mission', line: mission.line, basis: 'name' }
   for (const r of NAME_RULES) if (r.test.test(upper)) return { category: r.category, line: r.line, basis: 'name' }
 
   const byFleet = FLEET_DEFAULTS[operatorId]

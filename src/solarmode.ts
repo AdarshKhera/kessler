@@ -2,6 +2,7 @@ import { gstime } from 'satellite.js'
 import * as THREE from 'three'
 import { BODIES, MOONS, bodyById, moonsOf, type Body } from './data/bodies'
 import { lightMinutes } from './lib/ephemeris'
+import { loadSpaceData } from './data/spaceData'
 import { toHash } from './lib/urlstate'
 import { SAT_UNIT_AU, SolarSystem } from './scene/solar'
 import type { Stage } from './scene/stage'
@@ -53,7 +54,7 @@ export function createSolarMode(d: SolarDeps) {
   let wheelOut = 0
 
   const labels = new Labels($('labels'), (id) => focusBody(id))
-  const nav = new BodiesNav($('bodies'), (id) => focusBody(id), (k) => preset(k), () => void leave())
+  const nav = new BodiesNav($('bodies'), (id) => focusBody(id), (k) => preset(k), () => void leave(), (on) => solar.minor.setLayer('small', on))
   const scaleEl = $('scale')
   let atOverview = false
 
@@ -66,9 +67,12 @@ export function createSolarMode(d: SolarDeps) {
       : undefined
   }
 
+  const MINOR_LABEL = { probe: 'Spacecraft', comet: 'Comet', asteroid: 'Asteroid', dwarf: 'Dwarf planet', interstellar: 'Interstellar visitor' } as const
+
   function focusBody(id: string, cinematic = false): void {
-    const body = asBody(id)
-    if (!body || !solar.isBuilt) return
+    const minor = solar.minor.info(id)
+    const body = minor ? undefined : asBody(id)
+    if (!(minor || body) || !solar.isBuilt) return
     const cam = d.stage.solar.camera
     solar.setFocus(id, cinematic)
     solar.sharpen(id)
@@ -82,10 +86,12 @@ export function createSolarMode(d: SolarDeps) {
       solar.startZoom(cam, 3.2, 5, cam.position.length())
     } else solar.startZoom(cam, solar.viewDistance(id), 2.4, cam.position.length(), sunSide)
     nav.setFocus(id)
-    d.card.showBody(body, { sunAu: solar.distanceFromSunAu(id), earthAu: solar.distanceFromEarthAu(id), moons: moonsOf(id) })
-    d.focusBar.set({ kind: 'body', label: `Viewing ${body.name}`, detail: { star: 'Star', planet: 'Planet', dwarf: 'Dwarf planet', moon: 'Moon' }[body.kind], hint: 'Drag to orbit · scroll to zoom · ← → next world · Clear for the whole system' })
+    const name = minor?.name ?? body!.name
+    if (minor) d.card.showMinor(minor, { sunAu: solar.distanceFromSunAu(id), earthAu: solar.distanceFromEarthAu(id), inRange: solar.minor.inRange(id), range: solar.minor.trajectoryRange })
+    else if (body) d.card.showBody(body, { sunAu: solar.distanceFromSunAu(id), earthAu: solar.distanceFromEarthAu(id), moons: moonsOf(id) })
+    d.focusBar.set({ kind: 'body', label: `Viewing ${name}`, detail: minor ? MINOR_LABEL[minor.kind] : { star: 'Star', planet: 'Planet', dwarf: 'Dwarf planet', moon: 'Moon' }[body!.kind], hint: 'Drag to orbit · scroll to zoom · ← → next one · Clear for the whole system' })
     writeHash(toHash({ body: id }))
-    document.title = `${body.name} | Kessler`
+    document.title = `${name} | Kessler`
   }
 
   const todayHint = (): string => `Planets shown where they are on ${new Date(d.engine.clock.now()).toISOString().slice(0, 16).replace('T', ' ')} UTC. Use the speed buttons to watch them move.`
@@ -105,6 +111,15 @@ export function createSolarMode(d: SolarDeps) {
     document.title = 'Solar System | Kessler'
   }
 
+  /** Spacecraft paths and small-body orbits from NASA/JPL. Missing files just mean fewer things to look at. */
+  async function loadSpace(): Promise<void> {
+    if (solar.minor.loaded) return
+    const { probes, small } = await loadSpaceData()
+    if (solar.minor.loaded) return
+    solar.minor.load(probes, small)
+    nav.setSpace(solar.minor.list())
+  }
+
   async function enter(bodyId?: string): Promise<void> {
     if (active || busy) return
     busy = true
@@ -118,6 +133,7 @@ export function createSolarMode(d: SolarDeps) {
       // wait for the first view's images, but never hold the screen hostage on a slow connection
       await Promise.race([solar.loadSurfaces(first, (done, total) => (veil.dataset.msg = `Loading planet maps ${done} of ${total}`)), sleep(12_000)])
       veil.dataset.msg = ''
+      await Promise.race([loadSpace(), sleep(4000)])
       solar.prime(d.engine.clock.now())
       active = true
       d.stage.setMode('solar')
@@ -135,7 +151,7 @@ export function createSolarMode(d: SolarDeps) {
       $('bodies').hidden = false
       d.chrome.setTimeMode('solar')
       d.engine.setWarp(1)
-      if (bodyId && asBody(bodyId)) {
+      if (bodyId && (asBody(bodyId) || solar.minor.has(bodyId))) {
         solar.setFocus(bodyId, true)
         focusBody(bodyId)
       } else {
@@ -236,6 +252,13 @@ export function createSolarMode(d: SolarDeps) {
   /** Visit the next or previous body in Sun-to-Pluto order (moons count as their planet). */
   function step(delta: number): void {
     if (!active) return
+    if (solar.minor.has(solar.focusId)) {
+      const here = solar.minor.info(solar.focusId)!
+      const group = solar.minor.list().filter((m) => (m.kind === 'probe') === (here.kind === 'probe'))
+      const at = group.findIndex((m) => m.id === here.id)
+      focusBody(group[(((at + delta) % group.length) + group.length) % group.length].id)
+      return
+    }
     const parent = MOONS.find((m) => m.id === solar.focusId)?.parent ?? solar.focusId
     const i = atOverview ? -1 : BODIES.findIndex((b) => b.id === parent)
     const next = BODIES[(((i < 0 ? (delta > 0 ? -1 : 0) : i) + delta) % BODIES.length + BODIES.length) % BODIES.length]

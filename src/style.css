@@ -386,3 +386,12 @@ body.loading #brand, body.loading #top, body.loading #modes, body.loading #focus
 /* and a little more opaque on desktop for legibility over dense areas */
 #card { background: rgba(20, 22, 28, 0.82); }
 @media (max-width: 980px) { #card.expanded { padding-bottom: 44px; } }
+
+/* spacecraft and comets tabs in the Bodies nav */
+.blist { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
+.blist[hidden] { display: none; }
+.btabs { margin: 0 4px 8px; } .btabs .seg { flex: 1; height: 24px; font-size: 12px; } .btabs[hidden] { display: none; }
+.dotstoggle { margin: 6px 4px 2px; padding: 6px 10px; border-radius: 10px; font-size: 12px; color: var(--ink2); background: rgba(255, 255, 255, 0.06); } .dotstoggle:hover { color: var(--ink); background: rgba(255, 255, 255, 0.12); } .dotstoggle[hidden] { display: none; }
+.plabel.on { color: #000 !important; }
+.plabel.probe { color: #ffd6bf; } .plabel.comet, .plabel.interstellar { color: #bff3ff; } .plabel.asteroid, .plabel.dwarf { font-size: 11px; color: var(--ink2); }
+@media (max-width: 980px) { #bodies .blist { display: flex; gap: 6px; } #bodies .blist[hidden] { display: none; } #bodies .btabs { flex: none; margin: 0; } #bodies .dotstoggle { flex: none; margin: 0; white-space: nowrap; } }

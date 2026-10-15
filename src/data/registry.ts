@@ -11,6 +11,8 @@ export interface Group {
   readonly id: string
   readonly name: string
   readonly operator: string
+  /** Not a CelesTrak list: filled by matching names in the other lists (see missions.ts). */
+  readonly derived?: boolean
 }
 
 export const OPERATORS: readonly Operator[] = [
@@ -25,6 +27,7 @@ export const OPERATORS: readonly Operator[] = [
   { id: 'geo', name: 'GEO Comsats', color: '#e6edff', short: 'GE' },
   { id: 'weather', name: 'Meteorology', color: '#6cb6ff', short: 'WX' },
   { id: 'stations', name: 'Crewed Stations', color: '#ffffff', short: 'ST' },
+  { id: 'nasa', name: 'NASA missions', color: '#ff6a3d', short: 'NA' },
   { id: 'science', name: 'Science', color: '#ffe08a', short: 'SC' },
   { id: 'debris', name: 'Collision Debris', color: '#ff3b5c', short: 'DB' },
   { id: 'other', name: 'Other satellites', color: '#a1a1ad', short: 'OT' },
@@ -33,6 +36,7 @@ export const OPERATORS: readonly Operator[] = [
 export const GROUPS: readonly Group[] = [
   { id: 'stations', name: 'Stations', operator: 'stations' },
   { id: 'starlink', name: 'Starlink', operator: 'spacex' },
+  { id: 'spacex-other', name: 'Dragon capsules', operator: 'spacex', derived: true },
   { id: 'oneweb', name: 'OneWeb', operator: 'oneweb' },
   { id: 'gps-ops', name: 'GPS', operator: 'gps' },
   { id: 'galileo', name: 'Galileo', operator: 'galileo' },
@@ -42,6 +46,11 @@ export const GROUPS: readonly Group[] = [
   { id: 'planet', name: 'Planet Flock', operator: 'eo' },
   { id: 'spire', name: 'Spire Lemur', operator: 'eo' },
   { id: 'weather', name: 'Weather', operator: 'weather' },
+  { id: 'nasa-earth', name: 'Studying Earth', operator: 'nasa', derived: true },
+  { id: 'nasa-astro', name: 'Telescopes', operator: 'nasa', derived: true },
+  { id: 'nasa-helio', name: 'The Sun and near-Earth space', operator: 'nasa', derived: true },
+  { id: 'nasa-relay', name: 'Relay satellites (TDRS)', operator: 'nasa', derived: true },
+  { id: 'nasa-tech', name: 'Technology demonstrations', operator: 'nasa', derived: true },
   { id: 'science', name: 'Science', operator: 'science' },
   { id: 'intelsat', name: 'Intelsat', operator: 'geo' },
   { id: 'ses', name: 'SES', operator: 'geo' },

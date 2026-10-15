@@ -4,7 +4,9 @@ import { OBJECT_TYPE, OPS_STATUS, type SatcatRecord } from '../data/satcat'
 import type { Sat } from '../data/types'
 import type { Body, Moon } from '../data/bodies'
 import type { Country, CountrySummary } from '../lib/countries'
+import type { MinorInfo } from '../scene/minor'
 import { lightMinutes } from '../lib/ephemeris'
+import { aphelion, periodDays } from '../lib/kepler'
 import type { FleetSummary } from '../lib/fleet'
 import type { OrbitSummary } from '../lib/orbit'
 import type { Purpose } from '../lib/purpose'
@@ -38,7 +40,7 @@ const BASIS_NOTE: Readonly<Record<Purpose['basis'], string>> = {
 }
 
 export const FLEET_BLURB: Readonly<Record<string, string>> = {
-  spacex: 'Starlink, the largest satellite constellation ever flown. Broadband from low orbit.',
+  spacex: 'Starlink, the largest satellite constellation ever flown, plus the Dragon capsules that fly crew and cargo to the station. Starshield craft are not published in public catalogues.',
   oneweb: 'Eutelsat OneWeb. Global broadband from about 1,200 km up.',
   gps: 'GPS, run by the US Space Force. Navigation from 20,200 km.',
   galileo: "Europe's own navigation system.",
@@ -49,6 +51,7 @@ export const FLEET_BLURB: Readonly<Record<string, string>> = {
   geo: 'Communications satellites parked at 35,786 km, fixed over one spot.',
   weather: 'Weather satellites watching clouds, storms and oceans.',
   stations: "Crewed stations: the ISS and China's Tiangong.",
+  nasa: 'NASA’s own spacecraft in Earth orbit: Earth-science satellites, telescopes like Hubble and Swift, Sun-watchers and the TDRS relay network. Its deep-space craft (Voyager, New Horizons, Parker) are in the solar system view.',
   science: 'Telescopes and research missions.',
   debris: 'Fragments from two collisions and two anti-satellite tests. Each piece is a bullet.',
 }
@@ -255,6 +258,43 @@ export class Card {
       body.id === 'earth' && this.actions.enterEarth
         ? h('button', { class: 'primary wide', onClick: () => this.actions.enterEarth?.() }, 'Open satellite view')
         : null,
+    )
+  }
+
+  /** A spacecraft, comet, asteroid or dwarf planet from NASA/JPL data. */
+  showMinor(info: MinorInfo, live: { sunAu: number; earthAu: number; inRange: boolean; range: { from: string; to: string } | null }): void {
+    this.shownFleet = -1
+    const { probe, body: b } = info
+    const kindLabel = probe ? `${probe.agency} spacecraft` : { comet: 'Comet', asteroid: 'Asteroid', dwarf: 'Dwarf planet', interstellar: 'Interstellar visitor', probe: 'Spacecraft' }[info.kind]
+    this.liveBody = { sun: h('b'), earth: h('b') }
+    this.setBodyDistances(live.sunAu, live.earthAu)
+    const years = (d: number) => (d < 700 ? `${Math.round(d)} days` : `${fmt(d / 365.25, d / 365.25 < 100 ? 1 : 0)} years`)
+    const au = (v: number) => (v < 10 ? v.toFixed(2) : v.toFixed(1))
+    const stats: HTMLElement[] = []
+    if (probe) stats.push(this.stat(h('b', {}, probe.launched), '', 'launched'), this.stat(h('b', {}, probe.agency), '', 'agency'))
+    else if (b) {
+      const per = periodDays(b.el.q, b.el.e)
+      const far = aphelion(b.el.q, b.el.e)
+      stats.push(
+        this.stat(h('b', {}, b.diameterKm ? (b.diameterKm < 10 ? b.diameterKm.toFixed(2) : fmt(b.diameterKm, b.diameterKm < 100 ? 1 : 0)) : '–'), 'km', 'across'),
+        this.stat(h('b', {}, per === null ? 'never' : years(per)), '', per === null ? 'returns' : 'per orbit'),
+        this.stat(h('b', {}, au(b.el.q)), 'AU', 'closest to the Sun'),
+        this.stat(h('b', {}, far === null ? 'open' : au(far)), far === null ? '' : 'AU', 'farthest'),
+      )
+    }
+    stats.push(this.stat(this.liveBody.sun, 'AU', 'from the Sun'), this.stat(this.liveBody.earth, 'AU', 'from Earth now'))
+    const found = b?.discovery?.date ? `Discovered ${b.discovery.date.replace(/-/g, ' ')}${b.discovery.by ? ` by ${b.discovery.by}` : ''}.` : null
+    this.show(
+      h('p', { class: 'eyebrow plain' }, h('span', { class: 'orb', style: { '--c': info.color } }), kindLabel),
+      h('h2', {}, info.name),
+      h('p', { class: 'lede' }, info.blurb),
+      h('div', { class: 'stats two' }, ...stats),
+      probe ? h('p', { class: 'sub' }, probe.status) : b?.cls ? h('p', { class: 'sub' }, `${b.cls.replace(/\*$/, '')}${found ? `. ${found}` : ''}`) : null,
+      probe ? this.section('Did you know', true, ...probe.facts.map((f) => h('p', { class: 'fact-line' }, f))) : null,
+      !live.inRange && live.range
+        ? h('p', { class: 'fine' }, `Its published path covers ${live.range.from.slice(0, 4)} to ${live.range.to.slice(0, 4)}. Outside that the craft is held at the end of the path.`)
+        : null,
+      h('p', { class: 'fine' }, probe ? 'Positions: NASA/JPL Horizons. Facts are a summary, not live telemetry.' : 'Orbit: NASA/JPL Small-Body Database. Position is calculated from the orbit.'),
     )
   }
 
