@@ -1,11 +1,18 @@
 import * as THREE from 'three'
 import { BODIES, MOONS, SUN, bodyById, moonsOf, type Body, type Moon } from '../data/bodies'
+import { ATMOSPHERES, BORROWS_MOON_SURFACE, BUMP, RING_INNER, RING_OUTER } from '../data/planetMaps'
 import { AU_KM, PLANET_IDS, heliocentric, moonGeocentric, orbitPath, poleEcliptic, type PlanetId, type Vec3 } from '../lib/ephemeris'
+import { atmosphereShells, patchEarth, patchRingShadow, ringMaterial, texUniform, trackLocal, trackSunView, vec3Uniform } from './shading'
+import { SurfaceLoader, type Layer, type SurfaceSink } from './surfaces'
+import { TextureStore, allowHugeMaps } from './textureStore'
 import { bodyTexture, ringTexture } from './textures'
 
 /** One scene unit in the satellite scene is 1000 km; this converts it to AU. */
 export const SAT_UNIT_AU = 1000 / AU_KM
 const MIN_ANGULAR = { star: 0.03, planet: 0.011, dwarf: 0.008, moon: 0.004 } as const
+const SKY_RADIUS = 3500
+/** Linear HDR multiplier on the Sun's surface image, so it blooms like a star rather than a painted ball. */
+const SUN_TINT = new THREE.Color(1.75, 1.5, 1.15)
 
 /** Ecliptic (x east, z north) to three.js (y up). */
 const toScene = (v: Vec3, out: THREE.Vector3 = new THREE.Vector3()): THREE.Vector3 => out.set(v.x, v.z, -v.y)
@@ -16,17 +23,22 @@ interface PlanetNode {
   readonly group: THREE.Group
   readonly tilt: THREE.Group
   readonly spin: THREE.Mesh
+  readonly material: THREE.MeshStandardMaterial
   readonly orbit: THREE.LineLoop
   readonly moonRoot: THREE.Group
   /** absolute heliocentric position, scene axes, AU (double precision) */
   pos: THREE.Vector3
+  /** unit vector from this body toward the Sun, scene axes */
+  readonly sunDir: THREE.Vector3
 }
 
 interface MoonNode {
   readonly moon: Moon
   readonly mesh: THREE.Mesh
+  readonly material: THREE.MeshStandardMaterial
   readonly phase0: number
   pos: THREE.Vector3
+  readonly sunDir: THREE.Vector3
 }
 
 export interface LabelPoint {
@@ -38,15 +50,21 @@ export interface LabelPoint {
   readonly visible: boolean
 }
 
+export interface SolarOptions {
+  readonly maxAnisotropy: number
+  readonly maxTextureSize: number
+}
+
 function glowTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas')
   c.width = c.height = 256
   const g = c.getContext('2d')!
   const grad = g.createRadialGradient(128, 128, 0, 128, 128, 128)
-  grad.addColorStop(0, 'rgba(255,236,190,1)')
-  grad.addColorStop(0.12, 'rgba(255,214,140,0.85)')
-  grad.addColorStop(0.35, 'rgba(255,170,80,0.28)')
-  grad.addColorStop(1, 'rgba(255,140,40,0)')
+  grad.addColorStop(0, 'rgba(255,240,205,1)')
+  grad.addColorStop(0.1, 'rgba(255,222,160,0.8)')
+  grad.addColorStop(0.3, 'rgba(255,176,90,0.26)')
+  grad.addColorStop(0.65, 'rgba(255,140,50,0.06)')
+  grad.addColorStop(1, 'rgba(255,120,30,0)')
   g.fillStyle = grad
   g.fillRect(0, 0, 256, 256)
   return new THREE.CanvasTexture(c)
@@ -56,15 +74,24 @@ function glowTexture(): THREE.CanvasTexture {
  * The solar system with a floating origin: everything is positioned relative to the focused body, in
  * double precision, so the camera always works near the origin and nothing jitters even 40 AU out.
  */
-export class SolarSystem {
+export class SolarSystem implements SurfaceSink {
   readonly root = new THREE.Group()
   private readonly world = new THREE.Group()
   private readonly planets = new Map<string, PlanetNode>()
   private readonly moons: MoonNode[] = []
   private readonly sunGroup = new THREE.Group()
   private readonly sunMesh: THREE.Mesh
+  private readonly sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffe2a8 })
   private readonly sunGlow: THREE.Sprite
   private readonly light = new THREE.PointLight(0xfff1dc, 3.2, 0, 0)
+  private readonly sky: THREE.Mesh
+  private readonly skyMaterial = new THREE.MeshBasicMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, color: new THREE.Color(1.9, 1.9, 2.2) })
+  private clouds: THREE.Mesh | null = null
+  private ring: THREE.Mesh | null = null
+  private readonly ringMap = texUniform()
+  private readonly earthSpecMap = texUniform()
+  private surfaces: SurfaceLoader | null = null
+  private readonly options: SolarOptions
   private built = false
   private focus = new THREE.Vector3()
   private focusTarget = new THREE.Vector3()
@@ -76,26 +103,36 @@ export class SolarSystem {
   private readonly raycaster = new THREE.Raycaster()
   private readonly tmp = new THREE.Vector3()
 
-  constructor() {
-    this.sunMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), new THREE.MeshBasicMaterial({ color: 0xffe2a8 }))
+  constructor(options: SolarOptions = { maxAnisotropy: 4, maxTextureSize: 4096 }) {
+    this.options = options
+    this.sunMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), this.sunMaterial)
     this.sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }))
     this.sunGroup.add(this.sunMesh, this.sunGlow, this.light)
-    this.root.add(this.world, this.sunGroup, new THREE.AmbientLight(0xffffff, 0.12))
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(SKY_RADIUS, 64, 32), this.skyMaterial)
+    this.sky.renderOrder = -10
+    this.sky.visible = false
+    this.sky.frustumCulled = false
+    this.sky.rotation.set(1.05, 0.9, 0) // the image is in galactic coordinates; tip the band about 60 degrees to the ecliptic
+    this.root.add(this.sky, this.world, this.sunGroup, new THREE.AmbientLight(0xffffff, 0.1))
   }
 
-  /** Builds meshes and textures. Deferred so the cost is only paid when someone opens the solar system. */
+  /** Builds meshes. Deferred so the cost is only paid when someone opens the solar system; images arrive via loadSurfaces. */
   build(): void {
     if (this.built) return
     this.built = true
-    const sphere = new THREE.SphereGeometry(1, 64, 48)
+    const sphere = new THREE.SphereGeometry(1, 128, 96)
     for (const body of BODIES) {
       if (body.id === 'sun') continue
       const id = body.id as PlanetId
       const group = new THREE.Group()
       const tilt = new THREE.Group()
-      const spin = new THREE.Mesh(sphere, new THREE.MeshStandardMaterial({ map: bodyTexture(body.id), roughness: 1, metalness: 0 }))
+      const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(body.color), roughness: 1, metalness: 0 })
+      const spin = new THREE.Mesh(sphere, material)
+      const sunDir = new THREE.Vector3(1, 0, 0)
       tilt.add(spin)
-      if (body.rings) tilt.add(this.makeRings())
+      if (body.id === 'earth') this.dressEarth(material, spin, tilt, sunDir)
+      if (body.rings) this.addRings(material, spin, tilt, sunDir)
+      this.addAtmosphere(body.id, group, sunDir)
       // orient the spin axis along the body's real north pole (ecliptic frame, then to scene axes)
       const pole = toScene(poleEcliptic(body.pole.ra, body.pole.dec)).normalize()
       tilt.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pole)
@@ -114,26 +151,144 @@ export class SolarSystem {
       const moonRoot = new THREE.Group()
       this.world.add(orbit)
       this.root.add(group, moonRoot)
-      this.planets.set(body.id, { body, group, tilt, spin, orbit, moonRoot, pos: new THREE.Vector3() })
+      this.planets.set(body.id, { body, group, tilt, spin, material, orbit, moonRoot, pos: new THREE.Vector3(), sunDir })
     }
     MOONS.forEach((moon, i) => {
-      const mesh = new THREE.Mesh(sphere, new THREE.MeshStandardMaterial({ map: bodyTexture(moon.id === 'moon' ? 'moon' : 'default'), color: new THREE.Color(moon.color), roughness: 1 }))
+      const tint = new THREE.Color(moon.color)
+      if (BORROWS_MOON_SURFACE.has(moon.id)) tint.multiplyScalar(1.7)
+      const material = new THREE.MeshStandardMaterial({ color: tint, roughness: 1 })
+      const mesh = new THREE.Mesh(sphere, material)
       mesh.visible = false
+      const sunDir = new THREE.Vector3(1, 0, 0)
+      this.addAtmosphere(moon.id, mesh, sunDir)
       this.planets.get(moon.parent)?.moonRoot.add(mesh)
-      this.moons.push({ moon, mesh, phase0: ((i * 2.399963) % (Math.PI * 2)), pos: new THREE.Vector3() })
+      this.moons.push({ moon, mesh, material, phase0: ((i * 2.399963) % (Math.PI * 2)), pos: new THREE.Vector3(), sunDir })
     })
+    this.surfaces = new SurfaceLoader(
+      new TextureStore(this.options.maxAnisotropy),
+      this,
+      matchMedia('(pointer: coarse)').matches ? 1 : 3,
+      allowHugeMaps(this.options.maxTextureSize),
+      (id) => (id === 'rings' ? ringTexture() : id === 'sun' ? null : bodyTexture(MOONS.some((m) => m.id === id) ? (id === 'moon' ? 'moon' : 'default') : id)),
+    )
   }
 
-  private makeRings(): THREE.Mesh {
-    const inner = 1.24
-    const outer = 2.27
-    const geo = new THREE.RingGeometry(inner, outer, 160, 1)
-    const pos = geo.attributes.position
-    const uv = geo.attributes.uv
-    for (let i = 0; i < pos.count; i++) uv.setXY(i, (Math.hypot(pos.getX(i), pos.getY(i)) - inner) / (outer - inner), 0.5)
-    const ring = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: ringTexture(), transparent: true, side: THREE.DoubleSide, depthWrite: false, roughness: 1, emissive: 0x2a2620 }))
+  /** Earth gets a night side with city lights, ocean glint, relief and a drifting cloud layer. */
+  private dressEarth(material: THREE.MeshStandardMaterial, spin: THREE.Mesh, tilt: THREE.Group, sunDir: THREE.Vector3): void {
+    const sunView = vec3Uniform()
+    patchEarth(material, sunView, this.earthSpecMap)
+    trackSunView(spin, sunDir, sunView)
+    material.emissive.set(0x000000)
+    material.normalScale.set(0.9, 0.9)
+    const clouds = new THREE.Mesh(
+      spin.geometry,
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, transparent: true, depthWrite: false }),
+    )
+    clouds.scale.setScalar(1.0065)
+    clouds.visible = false
+    clouds.raycast = () => undefined
+    tilt.add(clouds)
+    this.clouds = clouds
+  }
+
+  /** Saturn: the real ring image, shadowed by the planet, throwing its own shadow back onto the globe. */
+  private addRings(material: THREE.MeshStandardMaterial, spin: THREE.Mesh, tilt: THREE.Group, sunDir: THREE.Vector3): void {
+    const sunOnGlobe = vec3Uniform()
+    patchRingShadow(material, sunOnGlobe, this.ringMap)
+    trackLocal(spin, sunDir, sunOnGlobe)
+    const sunOnRing = vec3Uniform()
+    const camOnRing = vec3Uniform()
+    const ring = new THREE.Mesh(new THREE.RingGeometry(RING_INNER, RING_OUTER, 256, 1), ringMaterial(this.ringMap, sunOnRing, camOnRing))
     ring.rotation.x = -Math.PI / 2
-    return ring
+    ring.visible = false
+    ring.raycast = () => undefined
+    trackLocal(ring, sunDir, sunOnRing, camOnRing)
+    tilt.add(ring)
+    this.ring = ring
+  }
+
+  private addAtmosphere(id: string, parent: THREE.Object3D, sunDir: THREE.Vector3): void {
+    const spec = ATMOSPHERES[id]
+    if (!spec) return
+    const sunView = vec3Uniform()
+    const { rim, glow } = atmosphereShells(spec, sunView, id === 'earth' ? 0.3 : 0.12)
+    trackSunView(rim, sunDir, sunView)
+    trackSunView(glow, sunDir, sunView)
+    parent.add(rim, glow)
+  }
+
+  // ---- images ----
+
+  /** Resolves once the first view has what it needs; every other world keeps loading and appears as it arrives. */
+  async loadSurfaces(firstIds: readonly string[], onProgress?: (done: number, total: number) => void): Promise<void> {
+    const surfaces = this.surfaces
+    if (!surfaces) return
+    const first = ['sun', ...firstIds]
+    await surfaces.loadFirst(first, onProgress)
+    const rest = [...BODIES.map((b) => b.id), ...MOONS.map((m) => m.id)].filter((id) => !first.includes(id))
+    surfaces.loadRest(rest)
+  }
+
+  /** A sharper map for the world being looked at (no-op for worlds that only have one). */
+  sharpen(id: string): void {
+    void this.surfaces?.sharpen(id).then(() => this.surfaces?.touch(id))
+  }
+
+  setMap(id: string, tex: THREE.Texture | null): void {
+    const mat = id === 'sun' ? this.sunMaterial : (this.planets.get(id)?.material ?? this.moons.find((m) => m.moon.id === id)?.material)
+    if (!mat || !tex) return
+    const first = !mat.map
+    mat.map = tex
+    if (mat instanceof THREE.MeshStandardMaterial) {
+      const bump = BUMP[id]
+      if (bump !== undefined) {
+        mat.bumpMap = tex
+        mat.bumpScale = bump
+      }
+      mat.color.set(BORROWS_MOON_SURFACE.has(id) ? new THREE.Color(MOONS.find((m) => m.id === id)?.color ?? '#ffffff').multiplyScalar(1.7) : 0xffffff)
+    } else mat.color.copy(SUN_TINT)
+    if (first) mat.needsUpdate = true
+  }
+
+  setLayer(layer: Layer, tex: THREE.Texture): void {
+    switch (layer) {
+      case 'earthNight': {
+        const earth = this.planets.get('earth')?.material
+        if (!earth) return
+        earth.emissiveMap = tex
+        earth.emissive.setRGB(1, 0.8, 0.5)
+        earth.emissiveIntensity = 1.5
+        earth.needsUpdate = true
+        return
+      }
+      case 'earthNormal': {
+        const earth = this.planets.get('earth')?.material
+        if (!earth) return
+        earth.normalMap = tex
+        earth.needsUpdate = true
+        return
+      }
+      case 'earthSpec':
+        this.earthSpecMap.value = tex
+        return
+      case 'earthClouds': {
+        const mat = this.clouds?.material as THREE.MeshStandardMaterial | undefined
+        if (!mat || !this.clouds) return
+        mat.alphaMap = tex
+        mat.needsUpdate = true
+        this.clouds.visible = true
+        return
+      }
+      case 'saturnRing':
+        this.ringMap.value = tex
+        if (this.ring) this.ring.visible = true
+        return
+      case 'sky':
+        this.skyMaterial.map = tex
+        this.skyMaterial.needsUpdate = true
+        this.sky.visible = true
+        return
+    }
   }
 
   // ---- positions ----
@@ -294,7 +449,9 @@ export class SolarSystem {
     const sunDist = camera.position.distanceTo(sunRel)
     const sunScale = Math.max(radiusAu(SUN), MIN_ANGULAR.star * sunDist * 0.55)
     this.sunMesh.scale.setScalar(sunScale)
-    this.sunGlow.scale.setScalar(sunScale * 9)
+    this.sunMesh.rotation.y = (nowMs / 3_600_000 / SUN.rotationHours) * Math.PI * 2
+    this.sunGlow.scale.setScalar(sunScale * 5)
+    this.sky.position.copy(camera.position)
 
     for (const node of this.planets.values()) {
       node.group.position.copy(node.pos).sub(this.focus)
@@ -306,6 +463,8 @@ export class SolarSystem {
       const hours = node.body.rotationHours
       const turns = node.body.id === 'earth' ? this.earthSpin : (((nowMs / 3_600_000) / hours) % 1) * Math.PI * 2
       node.spin.rotation.y = turns
+      node.sunDir.copy(sunRel).sub(node.group.position).normalize()
+      if (node.body.id === 'earth' && this.clouds) this.clouds.rotation.y = turns + (nowMs / 3_600_000) * 0.01
       const focused = node.body.id === this.focusId
       ;(node.orbit.material as THREE.LineBasicMaterial).opacity = focused ? 0.5 : 0.16
       const showMoons = dist < Math.max(0.2, real * 400)
@@ -318,6 +477,7 @@ export class SolarSystem {
       const parent = this.planets.get(m.moon.parent)!
       m.mesh.position.copy(m.pos).sub(parent.pos) // relative to the parent's moonRoot
       const world = this.tmp.copy(m.pos).sub(this.focus)
+      m.sunDir.copy(this.sunGroup.position).sub(world).normalize()
       const dist = camera.position.distanceTo(world)
       m.mesh.scale.setScalar(Math.max(radiusAu(m.moon), MIN_ANGULAR.moon * dist))
     }

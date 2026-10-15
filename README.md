@@ -117,6 +117,7 @@ Ideas not built yet
 Created by Adarsh Khera. Independent personal project, not affiliated with or endorsed by SpaceX, CelesTrak, NASA or any operator shown.
 
 Open source used: three.js (MIT), satellite.js (MIT), d3-geo, topojson-client and world-atlas (ISC), Natural Earth data (public domain), Vite (MIT), TypeScript (Apache-2.0).
+Planet imagery: textures from [Solar System Scope](https://www.solarsystemscope.com/textures/) (CC BY 4.0, derived from NASA data) and NASA/USGS public-domain mosaics of Pluto and the small moons via Wikimedia Commons. Files are in `public/textures/planets`; moons without a public map borrow the Moon's surface, tinted.
 Data: CelesTrak by Dr. T.S. Kelso (element data originates from the US Space Force tracking network), Launch Library 2 by The Space Devs.
 Inspired by stuffin.space and KeepTrack. Named after the Kessler syndrome, proposed by NASA scientist Donald Kessler.
 

@@ -20,6 +20,8 @@ export interface Stage {
   readonly solar: SolarRig
   readonly canvas: HTMLCanvasElement
   readonly mode: StageMode
+  readonly maxAnisotropy: number
+  readonly maxTextureSize: number
   setMode(mode: StageMode): void
   /** Called every frame before the solar scene renders, so the caller can step it. */
   onSolarFrame: ((dt: number) => void) | null
@@ -67,7 +69,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   solarControls.maxDistance = 400
   solarControls.enabled = false
 
-  const composer = new EffectComposer(renderer)
+  const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: matchMedia('(pointer: coarse)').matches ? 0 : 4 })
+  const composer = new EffectComposer(renderer, target)
   const renderPass = new RenderPass(scene, camera)
   composer.addPass(renderPass)
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.38, 0.45, 0.32)
@@ -124,6 +127,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     get mode() {
       return mode
     },
+    maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
+    maxTextureSize: renderer.capabilities.maxTextureSize,
     onSolarFrame: null,
     setMode(next) {
       mode = next
@@ -131,6 +136,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       solarControls.enabled = next === 'solar'
       renderPass.scene = next === 'earth' ? scene : solarScene
       renderPass.camera = next === 'earth' ? camera : solarCamera
+      // the solar view is lit like a photograph: filmic tone curve and a bloom that only catches the Sun
+      renderer.toneMapping = next === 'solar' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping
+      renderer.toneMappingExposure = next === 'solar' ? 1.05 : 1
+      bloom.threshold = next === 'solar' ? 0.95 : 0.32
+      bloom.strength = next === 'solar' ? 0.7 : 0.38
+      bloom.radius = next === 'solar' ? 0.65 : 0.45
     },
     flyTo,
     zoomBy: (factor) => {

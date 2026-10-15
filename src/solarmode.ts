@@ -41,7 +41,7 @@ function writeHash(hash: string): void {
 
 /** Orchestrates the solar-system view: transitions, focus, labels, and the satellite cloud around Earth. */
 export function createSolarMode(d: SolarDeps) {
-  const solar = new SolarSystem()
+  const solar = new SolarSystem({ maxAnisotropy: d.stage.maxAnisotropy, maxTextureSize: d.stage.maxTextureSize })
   d.stage.solar.scene.add(createStars(2600, 2400), solar.root)
   d.stage.solar.controls.addEventListener('start', () => solar.cancelZoom())
   const veil = $('veil')
@@ -71,6 +71,7 @@ export function createSolarMode(d: SolarDeps) {
     if (!body || !solar.isBuilt) return
     const cam = d.stage.solar.camera
     solar.setFocus(id, cinematic)
+    solar.sharpen(id)
     d.stage.solar.controls.minDistance = solar.minDistance(id)
     atOverview = false
     const sunSide = id === 'sun' ? undefined : solar.sunSideDirection(id)
@@ -112,6 +113,11 @@ export function createSolarMode(d: SolarDeps) {
       await sleep(460)
       d.clearEarthView()
       solar.build()
+      veil.dataset.msg = 'Loading planet maps'
+      const first = bodyId && asBody(bodyId) ? [bodyId, 'earth'] : ['earth']
+      // wait for the first view's images, but never hold the screen hostage on a slow connection
+      await Promise.race([solar.loadSurfaces(first, (done, total) => (veil.dataset.msg = `Loading planet maps ${done} of ${total}`)), sleep(12_000)])
+      veil.dataset.msg = ''
       solar.prime(d.engine.clock.now())
       active = true
       d.stage.setMode('solar')
