@@ -46,7 +46,8 @@ const $ = (id: string) => document.getElementById(id)!
 
 function bootScreen(): ((text: string, pct: number) => void) & { stop: () => void } {
   const root = $('boot')
-  const line = h('div', { class: 'bootline' })
+  const line = h('span', { class: 'bootline' })
+  const pctText = h('span', { class: 'bootpct' })
   const fill = h('i')
   const quote = h('p', { class: 'bootquote' })
   const order = [...LOADING_QUOTES].sort(() => Math.random() - 0.5)
@@ -56,21 +57,24 @@ function bootScreen(): ((text: string, pct: number) => void) & { stop: () => voi
     window.setTimeout(() => {
       quote.textContent = order[n++ % order.length]
       quote.classList.add('in')
-    }, 350)
+    }, 450)
   }
   quote.textContent = order[n++]
   requestAnimationFrame(() => quote.classList.add('in'))
   const timer = window.setInterval(show, 5200)
   root.replaceChildren(
-    h('div', { class: 'bootcard' },
+    h('div', { class: 'bootpanel' },
       h('div', { class: 'bootmark' }, 'Kessler'),
       quote,
       h('div', { class: 'bootbar' }, fill),
-      line,
+      h('div', { class: 'bootmeta' }, line, pctText),
       h('div', { class: 'bootby' }, 'by Adarsh Khera')),
   )
   const update = (text: string, pct: number) => {
     line.textContent = text
+    pctText.textContent = pct > 0 ? `${Math.round(pct)}%` : ''
+    // a long message with no progress is a failure: let it wrap instead of cutting it off
+    root.classList.toggle('error', pct === 0 && text.length > 36)
     fill.style.width = `${pct}%`
   }
   return Object.assign(update, { stop: () => window.clearInterval(timer) })
@@ -164,6 +168,7 @@ async function main(): Promise<void> {
   const globe = createGlobe()
   const shells = createShells()
   stage.scene.add(createStars(), globe.root, shells)
+  shells.visible = false // the ring labels would peek out from behind the loader
   const previewSun = new THREE.Vector3()
   const previewScene = new Float32Array(3)
   let previewing = true
@@ -195,6 +200,7 @@ async function main(): Promise<void> {
     await engine.start()
   } finally {
     previewing = false
+    shells.visible = true
   }
 
   const swarm = new Swarm(sats, engine.positions)
